@@ -1,7 +1,9 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
+import { Appearance } from 'react-native';
 import { fetchEvents } from '../lib/apiClient.mock';
 import type { CurrencyCode, Event, EventMetrics, Language } from '../lib/types';
+import type { ThemeName } from '../lib/theme';
 
 type EventsStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -14,9 +16,11 @@ type EventsState = {
 type AppState = {
   language: Language;
   currency: CurrencyCode;
+  theme: ThemeName;
   events: EventsState;
   setLanguage: (lang: Language) => void;
   setCurrency: (currency: CurrencyCode) => void;
+  setTheme: (theme: ThemeName) => void;
   loadEvents: () => Promise<void>;
   clearEventsCache: () => void;
 };
@@ -26,6 +30,7 @@ const AppStateContext = createContext<AppState | undefined>(undefined);
 export const AppStateProvider = ({ children }: PropsWithChildren) => {
   const [language, setLanguage] = useState<Language>('es');
   const [currency, setCurrency] = useState<CurrencyCode>('ARS');
+  const [theme, setTheme] = useState<ThemeName>(() => (Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'));
   const [events, setEvents] = useState<EventsState>({
     data: [],
     status: 'idle',
@@ -68,13 +73,15 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     () => ({
       language,
       currency,
+      theme,
       events,
       setLanguage,
       setCurrency,
+      setTheme,
       loadEvents,
       clearEventsCache,
     }),
-    [language, currency, events, loadEvents, clearEventsCache],
+    [language, currency, theme, events, loadEvents, clearEventsCache],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

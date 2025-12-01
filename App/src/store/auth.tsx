@@ -32,6 +32,27 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const AUTH_BYPASS_ENABLED = true; // Temporary: skips login/change-password flow for dashboard work.
+const AUTH_BYPASS_USER: User = {
+  id: 'dev-bypass',
+  name: 'Dashboard Preview',
+  initials: 'DP',
+  email: 'bypass@tuentrada.com',
+};
+const AUTH_BYPASS_CONTEXT: AuthContextValue = {
+  status: 'authenticated',
+  user: AUTH_BYPASS_USER,
+  accessToken: 'dev-bypass',
+  sessionToken: undefined,
+  biometricEnabled: false,
+  loading: false,
+  login: async () => {},
+  changePassword: async () => {},
+  logout: async () => {},
+  enableBiometric: async () => false,
+  disableBiometric: async () => {},
+};
+
 const REFRESH_TOKEN_KEY = 'tuentrada_refresh_token';
 const BIOMETRIC_FLAG_KEY = 'tuentrada_biometric_enabled';
 
@@ -78,6 +99,14 @@ const useBiometricPrompt = () => {
 };
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
+  if (AUTH_BYPASS_ENABLED) {
+    return (
+      <AuthContext.Provider value={AUTH_BYPASS_CONTEXT}>
+        {children}
+      </AuthContext.Provider>
+    );
+  }
+
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [user, setUser] = useState<User | undefined>(undefined);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);

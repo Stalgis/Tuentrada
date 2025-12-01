@@ -1,30 +1,57 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import StatTile from '../components/StatTile';
-import EmptyState from '../components/EmptyState';
 import Section from '../components/UI/Section';
-import Button from '../components/UI/Button';
-import Chip from '../components/UI/Chip';
-import { formatCurrency } from '../lib/currency';
-import { useAppState, useEventMetrics } from '../store/appState';
 import { useTranslation } from '../hooks/useTranslation';
-import { dailySales } from '../data/salesStats';
+import {
+  DailySalesRow,
+  DailySalesSummary,
+  EventGeneralStats,
+  mockDailySalesSummaries,
+  mockEventGeneralStats,
+} from '../data/mockEventAnalytics';
 
-const SALES_RANGE_OPTIONS = [
-  { value: '7d', labelKey: 'last7Days' },
-  { value: '30d', labelKey: 'last30Days' },
-] as const;
-
-type SalesRange = (typeof SALES_RANGE_OPTIONS)[number]['value'];
+// Number helpers keep formatting consistent across the screen.
+const formatARS = (amount: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
+const formatPlainNumber = (amount: number) =>
+  new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(amount);
+const sumRevenue = (days: DailySalesRow[]) => days.reduce((sum, day) => sum + day.revenueARS, 0);
+const sumTickets = (days: DailySalesRow[]) => days.reduce((sum, day) => sum + day.ticketsSold, 0);
+const calcAverageTicket = (totalRevenue: number, totalTickets: number) =>
+  totalTickets > 0 ? totalRevenue / totalTickets : 0;
+const findBestDay = (days: DailySalesRow[]) =>
+  days.reduce((best, current) => (current.revenueARS > best.revenueARS ? current : best), days[0]);
 
 const DashboardScreen = () => {
-  const { events, loadEvents, currency } = useAppState();
-  const metrics = useEventMetrics();
-  const { t, language } = useTranslation();
+  const { language } = useTranslation();
   const { width } = useWindowDimensions();
-  const [range, setRange] = useState<SalesRange>('7d');
+
+  // Selected mock event/session (only one for now).
+  const eventStats: EventGeneralStats = mockEventGeneralStats;
+
+  // Fixed period: ultimos 7 dias.
+  const periodSummary: DailySalesSummary = useMemo(
+    () => mockDailySalesSummaries.find((summary) => summary.period === 'last7Days') ?? mockDailySalesSummaries[0],
+    [],
+  );
+
+  // Select the last available day by default, reset when period changes.
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => Math.max(periodSummary.days.length - 1, 0));
+  useEffect(() => {
+    setSelectedDayIndex(Math.max(periodSummary.days.length - 1, 0));
+  }, [periodSummary.days.length]);
+
+  const totalRevenuePeriod = useMemo(() => sumRevenue(periodSummary.days), [periodSummary.days]);
+  const totalTicketsPeriod = useMemo(() => sumTickets(periodSummary.days), [periodSummary.days]);
+  const averageTicket = useMemo(
+    () => calcAverageTicket(totalRevenuePeriod, totalTicketsPeriod),
+    [totalRevenuePeriod, totalTicketsPeriod],
+  );
+  const bestDay = useMemo(() => findBestDay(periodSummary.days), [periodSummary.days]);
+  const selectedDay = periodSummary.days[selectedDayIndex];
 
   const formatDate = useCallback(
     (dateISO: string, options: Intl.DateTimeFormatOptions) => {
@@ -34,207 +61,148 @@ const DashboardScreen = () => {
     [language],
   );
 
-  const visibleSales = useMemo(() => {
-    const days = range === '7d' ? 7 : 30;
-    return dailySales.slice(-days);
-  }, [range]);
-
-  const [selectedBar, setSelectedBar] = useState(() => Math.max(visibleSales.length - 1, 0));
-
-  useEffect(() => {
-    setSelectedBar(Math.max(visibleSales.length - 1, 0));
-  }, [visibleSales.length]);
-
-  const salesSummary = useMemo(() => {
-    const totalRevenue = visibleSales.reduce((sum, day) => sum + day.revenueARS, 0);
-    const totalTickets = visibleSales.reduce((sum, day) => sum + day.ticketsSold, 0);
-    return {
-      totalRevenue,
-      totalTickets,
-      avgTicket: totalTickets > 0 ? totalRevenue / totalTickets : 0,
-    };
-  }, [visibleSales]);
-
-  const bestDay = useMemo(() => {
-    if (visibleSales.length === 0) {
-      return undefined;
-    }
-    return visibleSales.reduce(
-      (best, current) => (current.revenueARS > best.revenueARS ? current : best),
-      visibleSales[0],
-    );
-  }, [visibleSales]);
-
   const chartData = useMemo(() => {
-    const labels = visibleSales.map((item, index) => {
-      if (range === '30d' && index % 3 !== 0) {
-        return '';
-      }
-      return formatDate(item.dateISO, { month: 'short', day: 'numeric' });
-    });
+    const labels = periodSummary.days.map((item) => formatDate(item.date, { day: 'numeric', month: 'short' }));
     return {
       labels,
       datasets: [
         {
-          data: visibleSales.map((item) => item.revenueARS),
+          data: periodSummary.days.map((item) => item.revenueARS),
         },
       ],
     };
-  }, [visibleSales, range, formatDate]);
+  }, [periodSummary.days, formatDate]);
 
-  const selectedDay = visibleSales[selectedBar];
-  const chartWidth = Math.min(Math.max(width - 48, 280), 720);
-
-  useEffect(() => {
-    if (events.status === 'idle') {
-      loadEvents();
-    }
-  }, [events.status, loadEvents]);
-
-  const onRefresh = useCallback(() => {
-    loadEvents();
-  }, [loadEvents]);
-
-  const isLoading = events.status === 'loading' && events.data.length === 0;
-  const hasError = events.status === 'error';
-  const isEmpty = events.status === 'success' && events.data.length === 0;
+  const chartWidth = Math.min(Math.max(width - 32, 300), 900);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView
-        className="flex-1 px-5 pt-4"
-        contentInsetAdjustmentBehavior="automatic"
-        refreshControl={<RefreshControl refreshing={events.status === 'loading'} onRefresh={onRefresh} />}
-      >
-      <Text className="mb-5 text-2xl font-semibold text-text">{t('overviewTitle')}</Text>
-
-      {isLoading && (
-        <View className="mt-20 items-center">
-          <ActivityIndicator size="large" color="#0f5cff" />
-          <Text className="mt-3 text-subtext">{t('loadingLabel')}...</Text>
+      <ScrollView className="flex-1 px-5 pt-4" contentInsetAdjustmentBehavior="automatic">
+        {/* Block 0: Header — what event am I looking at? */}
+        <View className="mb-5">
+          <Text className="text-2xl font-semibold text-text">{eventStats.eventName}</Text>
+          <Text className="text-sm text-subtext">
+            {eventStats.venueName}{' '}
+            {formatDate(eventStats.sessionDateTime, { day: '2-digit', month: '2-digit', year: 'numeric' })}{' '}
+            {formatDate(eventStats.sessionDateTime, { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
-      )}
 
-      {hasError && (
-        <View className="mt-10">
-          <EmptyState title="Oops" description={events.error ?? 'Something went wrong'} />
-          <Button label={t('retry')} className="mt-4" onPress={loadEvents} />
-        </View>
-      )}
-
-      {!isLoading && !hasError && (
-        <>
-          <View className="mb-4 flex-row gap-4">
-            <StatTile className="flex-1" label={t('upcomingEvents')} value={metrics.upcoming} />
-            <StatTile className="flex-1" label={t('ticketsSold')} value={metrics.ticketsSold.toLocaleString()} />
+        {/* Block 1: Event global KPIs — total tickets and total money for this event */}
+        <Section title="Resumen del evento">
+          <View className="flex-row flex-wrap gap-4">
+            <StatTile className="flex-1 min-w-[45%]" label="Tickets vendidos" value={eventStats.ticketsSold.toString()} />
+            <StatTile
+              className="flex-1 min-w-[45%]"
+              label="Total recaudado (ARS)"
+              value={formatARS(eventStats.totalRevenueARS)}
+              accent="#0f5cff"
+            />
+            <StatTile className="flex-1 min-w-[45%]" label="Invitaciones" value={eventStats.invitations.toString()} />
+            <StatTile className="flex-1 min-w-[45%]" label="Contactos" value={eventStats.contactsCount.toString()} />
           </View>
-          <StatTile
-            className="mb-6"
-            label={`${t('revenueLabel')} (${currency})`}
-            value={formatCurrency(metrics.totalRevenueARS, currency)}
-            accent="#0f5cff"
+        </Section>
+
+        {/* Block 2: Performance in period — ultimos 7 dias */}
+        <View className="mt-6">
+          <Text className="mb-3 text-lg font-semibold text-text">Rendimiento (ultimos 7 dias)</Text>
+
+          <View className="mb-4 flex-row flex-wrap gap-3">
+            <StatTile
+              className="flex-1 min-w-[45%]"
+              label="Ingresos ultimos 7 dias"
+              value={formatARS(totalRevenuePeriod)}
+              accent="#0f5cff"
+            />
+            <StatTile
+              className="flex-1 min-w-[45%]"
+              label="Entradas vendidas ultimos 7 dias"
+              value={totalTicketsPeriod.toLocaleString()}
+            />
+            <StatTile
+              className="flex-1 min-w-[45%]"
+              label="Ticket promedio"
+              value={formatARS(Math.round(averageTicket))}
+              accent="#0f9d58"
+            />
+          </View>
+
+          {/* Block 3: Daily bar chart — ingresos diarios (ARS) */}
+          <Text className="mb-2 text-sm font-semibold text-text">Ingresos diarios (ARS)</Text>
+          <BarChart
+            data={chartData}
+            width={chartWidth}
+            height={220}
+            fromZero
+            withInnerLines={false}
+            showValuesOnTopOfBars={false}
+            yAxisLabel=""
+            yAxisSuffix=""
+            chartConfig={{
+              backgroundGradientFrom: '#f8fafc',
+              backgroundGradientTo: '#f8fafc',
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(15, 92, 255, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
+              fillShadowGradient: '#0f5cff',
+              fillShadowGradientOpacity: 0.9,
+              propsForLabels: { fontSize: 11 },
+            }}
+            style={{ borderRadius: 16, marginRight: 8 }}
+            segments={4}
+            formatYLabel={(value) => formatPlainNumber(Number(value))}
+            barPercentage={0.42}
+            onDataPointClick={({ index }) => setSelectedDayIndex(index)}
           />
 
-          <Section
-            title={t('recentSalesTitle')}
-            action={
-              <View className="flex-row gap-2">
-                {SALES_RANGE_OPTIONS.map((option) => (
-                  <Chip
-                    key={option.value}
-                    label={t(option.labelKey)}
-                    size="sm"
-                    selected={range === option.value}
-                    onPress={() => setRange(option.value)}
-                  />
+          {/* Block 4: Selected day details + best day */}
+          {selectedDay && (
+            <View className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-subtext">Seleccionar dia</Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {periodSummary.days.map((day, index) => (
+                  <TouchableOpacity
+                    key={day.date}
+                    className={`min-w-[28%] rounded-2xl border px-3 py-2 ${
+                      selectedDayIndex === index ? 'border-primary-600 bg-primary-50' : 'border-slate-200 bg-white'
+                    }`}
+                    onPress={() => setSelectedDayIndex(index)}
+                  >
+                    <Text className="text-sm font-semibold text-text">
+                      {formatDate(day.date, { day: '2-digit', month: 'short' })}
+                    </Text>
+                    <Text className="text-xs text-subtext">{formatARS(day.revenueARS)}</Text>
+                  </TouchableOpacity>
                 ))}
               </View>
-            }
-          >
-            <View className="mb-4 flex-row flex-wrap gap-3">
-              <StatTile
-                className="flex-1 min-w-[45%]"
-                label={`${t('rangeRevenueLabel')} · ${range === '7d' ? t('last7Days') : t('last30Days')}`}
-                value={formatCurrency(salesSummary.totalRevenue, currency)}
-              />
-              <StatTile
-                className="flex-1 min-w-[45%]"
-                label={`${t('rangeTicketsLabel')} · ${range === '7d' ? t('last7Days') : t('last30Days')}`}
-                value={salesSummary.totalTickets.toLocaleString()}
-                accent="#0f172a"
-              />
-              <StatTile
-                className="flex-1 min-w-[45%]"
-                label={t('rangeAvgTicketLabel')}
-                value={formatCurrency(Math.round(salesSummary.avgTicket), currency)}
-                accent="#0f9d58"
-              />
-            </View>
-
-            <BarChart
-              data={chartData}
-              width={chartWidth}
-              height={220}
-              fromZero
-              withInnerLines={false}
-              showValuesOnTopOfBars={range === '7d'}
-              yAxisLabel=""
-              yAxisSuffix=""
-              chartConfig={{
-                backgroundGradientFrom: '#f8fafc',
-                backgroundGradientTo: '#f8fafc',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(15, 92, 255, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
-                fillShadowGradient: '#0f5cff',
-                fillShadowGradientOpacity: 0.9,
-                propsForLabels: { fontSize: 11 },
-              }}
-              style={{ borderRadius: 16 }}
-              segments={4}
-              formatYLabel={(value) => formatCurrency(Number(value), currency)}
-              barPercentage={range === '7d' ? 0.45 : 0.3}
-              onDataPointClick={({ index }) => setSelectedBar(index)}
-            />
-
-            {selectedDay && (
-              <View className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <Text className="text-xs uppercase tracking-wide text-subtext">
-                  {formatDate(selectedDay.dateISO, { weekday: 'short', month: 'short', day: 'numeric' })}
-                </Text>
-                <Text className="mt-1 text-xl font-semibold text-text">
-                  {formatCurrency(selectedDay.revenueARS, currency)}
-                </Text>
-                <Text className="text-xs text-subtext">{t('selectedDayRevenue')}</Text>
-                <View className="mt-3 flex-row items-baseline justify-between">
-                  <View>
-                    <Text className="text-lg font-semibold text-primary-700">{selectedDay.ticketsSold}</Text>
-                    <Text className="text-xs text-subtext">{t('selectedDayTickets')}</Text>
-                  </View>
-                  <Text className="text-xs text-subtext">{t('selectedDayHint')}</Text>
+              <View className="my-3 h-px bg-slate-200" />
+              <Text className="text-xs uppercase tracking-wide text-subtext">
+                {formatDate(selectedDay.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </Text>
+              <Text className="mt-1 text-xl font-semibold text-text">{formatARS(selectedDay.revenueARS)}</Text>
+              <Text className="text-xs text-subtext">Ingresos del dia</Text>
+              <View className="mt-3 flex-row items-baseline justify-between">
+                <View>
+                  <Text className="text-lg font-semibold text-primary-700">{selectedDay.ticketsSold}</Text>
+                  <Text className="text-xs text-subtext">Entradas vendidas</Text>
+                </View>
+                <View className="items-end">
+                  <Text className="text-base font-semibold text-text">{selectedDay.invitations}</Text>
+                  <Text className="text-xs text-subtext">Invitaciones</Text>
                 </View>
               </View>
-            )}
-
-            {bestDay && (
-              <View className="mt-4 flex-row items-center justify-between">
-                <Text className="text-sm text-subtext">
-                  {t('bestDayLabel')} · {formatDate(bestDay.dateISO, { month: 'short', day: 'numeric' })}
-                </Text>
-                <Text className="text-sm font-semibold text-text">{formatCurrency(bestDay.revenueARS, currency)}</Text>
-              </View>
-            )}
-          </Section>
-
-          {isEmpty && <EmptyState title={t('emptyTitle')} description={t('emptyBody')} />}
-
-          {!isEmpty && (
-            <Section title={t('suggestionsTitle')}>
-              <Text className="text-base text-subtext">{t('suggestionsBody')}</Text>
-            </Section>
+            </View>
           )}
-        </>
-      )}
+
+          {bestDay && (
+            <View className="mt-3">
+              <Text className="text-sm text-subtext">
+                Mejor dia del periodo: {formatDate(bestDay.date, { month: 'short', day: 'numeric' })} •{' '}
+                {formatARS(bestDay.revenueARS)}
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

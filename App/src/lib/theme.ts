@@ -1,4 +1,4 @@
-import { DefaultTheme, Theme as NavigationTheme } from '@react-navigation/native';
+import { DefaultTheme, DarkTheme, Theme as NavigationTheme } from '@react-navigation/native';
 
 export const lightPalette = {
   background: '#f8fafc',
@@ -12,18 +12,46 @@ export const lightPalette = {
   warning: '#eab308',
 };
 
+export const darkPalette = {
+  background: '#0f172a',
+  card: '#0b1220',
+  primary: '#4f8bff',
+  text: '#e2e8f0',
+  subtext: '#94a3b8',
+  border: '#1e293b',
+  muted: '#111827',
+  success: '#22c55e',
+  warning: '#f59e0b',
+};
+
 export type AppTheme = typeof lightPalette;
+export type ThemeName = 'light' | 'dark';
 
 export const lightTheme: AppTheme = lightPalette;
+export const darkTheme: AppTheme = darkPalette;
+export const getPalette = (theme: ThemeName): AppTheme => (theme === 'dark' ? darkPalette : lightPalette);
 
-export const navigationTheme: NavigationTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: lightPalette.background,
-    card: lightPalette.card,
-    border: lightPalette.border,
-    primary: lightPalette.primary,
-    text: lightPalette.text,
-  },
-};
+export const getNavigationTheme = (theme: ThemeName): NavigationTheme =>
+  theme === 'dark'
+    ? {
+        ...DarkTheme,
+        colors: {
+          ...DarkTheme.colors,
+          background: darkPalette.background,
+          card: darkPalette.card,
+          border: darkPalette.border,
+          primary: darkPalette.primary,
+          text: darkPalette.text,
+        },
+      }
+    : {
+        ...DefaultTheme,
+        colors: {
+          ...DefaultTheme.colors,
+          background: lightPalette.background,
+          card: lightPalette.card,
+          border: lightPalette.border,
+          primary: lightPalette.primary,
+          text: lightPalette.text,
+        },
+      };
