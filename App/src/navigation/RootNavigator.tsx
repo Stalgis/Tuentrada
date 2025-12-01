@@ -10,10 +10,11 @@ import EventDetailScreen from '../screens/EventDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import { navigationTheme } from '../lib/theme';
+import { getNavigationTheme } from '../lib/theme';
 import { EventsStackParamList, RootTabParamList, AuthStackParamList } from './types';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAuth } from '../store/auth';
+import { useAppState } from '../store/appState';
 import type { AuthStatus } from '../store/auth';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -40,6 +41,7 @@ const AuthNavigator = ({ status }: { status: AuthStatus }) => (
 const RootNavigator = () => {
   const { t } = useTranslation();
   const { status } = useAuth();
+  const { theme } = useAppState();
 
   const tabBarStyle = {
     backgroundColor: '#ffffff',
@@ -102,7 +104,7 @@ const RootNavigator = () => {
   );
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer theme={getNavigationTheme(theme)}>
       {status === 'checking'
         ? renderSplash()
         : status === 'authenticated'

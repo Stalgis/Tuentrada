@@ -30,7 +30,7 @@ const showToast = (message: string) => {
 
 const ProfileScreen = () => {
   const { user, biometricEnabled, enableBiometric, disableBiometric, logout } = useAuth();
-  const { language, setLanguage, currency, setCurrency, clearEventsCache } = useAppState();
+  const { language, setLanguage, currency, setCurrency, clearEventsCache, theme, setTheme } = useAppState();
   const { t } = useTranslation();
 
   const handleSignOut = () => {
@@ -67,6 +67,24 @@ const ProfileScreen = () => {
               accessibilityLabel={`Switch language to ${option.label}`}
             />
           ))}
+        </View>
+      </Section>
+
+      <Section title="Apariencia">
+        <Text className="text-base text-subtext">Elegí entre modo claro u oscuro. Por defecto usamos el del teléfono.</Text>
+        <View className="mt-3 flex-row gap-3">
+          <Chip
+            label="Light"
+            selected={theme === 'light'}
+            onPress={() => setTheme('light')}
+            accessibilityLabel="Cambiar a modo claro"
+          />
+          <Chip
+            label="Dark"
+            selected={theme === 'dark'}
+            onPress={() => setTheme('dark')}
+            accessibilityLabel="Cambiar a modo oscuro"
+          />
         </View>
       </Section>
 
