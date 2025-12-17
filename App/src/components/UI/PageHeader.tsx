@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { useAppState } from "../../store/appState";
 import Avatar from "../Avatar";
 import { useAuth } from "@/store/auth";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
 
 type PageHeaderProps = {
   title: string;
@@ -15,7 +15,13 @@ const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
   const { theme } = useAppState();
   const isDark = theme === "dark";
   const { user } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+
+  const handleAvatarPress = () => {
+    const parentNav = navigation.getParent?.();
+    const target = parentNav ?? navigation;
+    target.navigate("Profile");
+  };
 
   return (
     <View
@@ -44,11 +50,7 @@ const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
           </Text>
         ) : null}
       </View>
-      <Avatar
-        initials={user?.initials ?? "TU"}
-        size="md"
-        onPress={() => navigation.navigate("Profile")}
-      />
+      <Avatar initials={user?.initials ?? "TU"} size="md" onPress={handleAvatarPress} />
     </View>
   );
 };
