@@ -10,10 +10,10 @@ type SectionProps = ViewProps & {
 const Section: React.FC<SectionProps> = ({ title, action, children, className = '', ...rest }) => (
   <View className={`mb-6 ${className}`} {...rest}>
     <View className="mb-3 flex-row items-center justify-between">
-      <Text className="text-base font-semibold text-text">{title}</Text>
+      <Text className="text-base font-semibold text-text-light dark:text-text-dark">{title}</Text>
       {action}
     </View>
-    <View className="rounded-2xl bg-white p-4 shadow-card">{children}</View>
+    <View className="rounded-2xl bg-card-light p-4 shadow-card dark:bg-card-dark">{children}</View>
   </View>
 );
 

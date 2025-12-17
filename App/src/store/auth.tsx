@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   createContext,
   useContext,
   useState,
@@ -11,7 +11,7 @@ import { Alert, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { enableBioMetric, checkBiometricSupport } from 'react-native-biometric-check';
 import type { PropsWithChildren } from 'react';
-import { mockAuthApi, type AuthTokens } from '../lib/authMock';
+import { authApi, type AuthTokens } from '../lib/authApi';
 import type { User } from '../lib/types';
 
 export type AuthStatus = 'checking' | 'unauthenticated' | 'needsPasswordChange' | 'authenticated';
@@ -32,7 +32,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const AUTH_BYPASS_ENABLED = true; // Temporary: skips login/change-password flow for dashboard work.
+const AUTH_BYPASS_ENABLED = false; // set true only for local UI work without backend
 const AUTH_BYPASS_USER: User = {
   id: 'dev-bypass',
   name: 'Dashboard Preview',
@@ -56,11 +56,11 @@ const AUTH_BYPASS_CONTEXT: AuthContextValue = {
 const REFRESH_TOKEN_KEY = 'tuentrada_refresh_token';
 const BIOMETRIC_FLAG_KEY = 'tuentrada_biometric_enabled';
 
-const BIOMETRIC_PROMPT_TITLE = Platform.OS === 'ios' ? 'Face ID' : 'Biometría';
+const BIOMETRIC_PROMPT_TITLE = Platform.OS === 'ios' ? 'Face ID' : 'Biometria';
 const BIOMETRIC_PROMPT_SUBTITLE =
   Platform.OS === 'ios'
-    ? 'Autorizá el acceso con Face ID o código de seguridad.'
-    : 'Usá tu huella, rostro o PIN para continuar.';
+    ? 'Autoriza el acceso con Face ID o codigo de seguridad.'
+    : 'Usa tu huella, rostro o PIN para continuar.';
 
 const useBiometricPrompt = () => {
   const runPrompt = useCallback(
@@ -100,11 +100,7 @@ const useBiometricPrompt = () => {
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   if (AUTH_BYPASS_ENABLED) {
-    return (
-      <AuthContext.Provider value={AUTH_BYPASS_CONTEXT}>
-        {children}
-      </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={AUTH_BYPASS_CONTEXT}>{children}</AuthContext.Provider>;
   }
 
   const [status, setStatus] = useState<AuthStatus>('checking');
@@ -117,8 +113,15 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const promptBiometric = useBiometricPrompt();
 
   const persistTokens = useCallback(async (tokens: AuthTokens) => {
-    refreshTokenRef.current = tokens.refreshToken;
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    const refreshToken = tokens.refreshToken ?? null;
+    refreshTokenRef.current = refreshToken;
+
+    if (refreshToken) {
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    } else {
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    }
+
     setAccessToken(tokens.accessToken);
   }, []);
 
@@ -158,14 +161,13 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         } catch (error) {
           await clearStorage();
           setStatus('unauthenticated');
-          Alert.alert('Biometría', 'No se pudo validar tu identidad. Iniciá sesión manualmente.');
+          Alert.alert('Biometria', 'No se pudo validar tu identidad. Inicia sesion manualmente.');
           return;
         }
       }
 
-      const { tokens, user: nextUser } = await mockAuthApi.refresh(storedRefresh);
+      const { tokens, user: nextUser } = await authApi.refresh(storedRefresh);
       await persistTokens(tokens);
-      refreshTokenRef.current = tokens.refreshToken;
       setUser(nextUser);
       setStatus('authenticated');
     } catch (error) {
@@ -182,10 +184,10 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     async (email: string, password: string) => {
       setLoading(true);
       try {
-        const response = await mockAuthApi.login(email.trim(), password);
+        const response = await authApi.login(email.trim(), password);
         if (response.status === 'needsPasswordChange') {
           setUser(response.user);
-          setSessionToken(response.sessionToken);
+          setSessionToken((response as unknown as { sessionToken?: string }).sessionToken);
           setStatus('needsPasswordChange');
           return;
         }
@@ -200,11 +202,11 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const changePassword = useCallback(
     async (newPassword: string) => {
       if (!sessionToken) {
-        throw new Error('Sesión no disponible');
+        throw new Error('Sesion no disponible');
       }
       setLoading(true);
       try {
-        const { tokens, user: nextUser } = await mockAuthApi.changePassword(sessionToken, newPassword);
+        const { tokens, user: nextUser } = await authApi.changePassword(sessionToken, newPassword);
         await handleAuthSuccess({ tokens, nextUser });
       } finally {
         setLoading(false);
@@ -225,7 +227,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
   const enableBiometric = useCallback(async () => {
     if (!refreshTokenRef.current) {
-      Alert.alert('Biometría', 'Iniciá sesión para activar Face ID.');
+      Alert.alert('Biometria', 'Inicia sesion para activar Face ID.');
       return false;
     }
     try {
@@ -234,7 +236,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       setBiometricEnabled(true);
       return true;
     } catch (error) {
-      Alert.alert('Biometría', 'No se pudo habilitar Face ID / biometría.');
+      Alert.alert('Biometria', 'No se pudo habilitar Face ID / biometria.');
       return false;
     }
   }, [promptBiometric]);
