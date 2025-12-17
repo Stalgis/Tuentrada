@@ -1,32 +1,45 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Event } from '../data/mockEvents';
-import EventCard from '../components/EventCard';
-import Chip from '../components/UI/Chip';
-import EmptyState from '../components/EmptyState';
-import Button from '../components/UI/Button';
-import { useAppState } from '../store/appState';
-import { useTranslation } from '../hooks/useTranslation';
-import { EventsStackParamList } from '../navigation/types';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Event } from "../data/mockEvents";
+import EventCard from "../components/EventCard";
+import Chip from "../components/UI/Chip";
+import EmptyState from "../components/EmptyState";
+import Button from "../components/UI/Button";
+import { useAppState } from "../store/appState";
+import { useTranslation } from "../hooks/useTranslation";
+import { EventsStackParamList } from "../navigation/types";
+import PageHeader from "../components/UI/PageHeader";
 
-const statusFilters = ['all', 'on_sale', 'sold_out', 'finished'] as const;
+const statusFilters = ["all", "on_sale", "sold_out", "finished"] as const;
 
 const EventsListScreen = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<EventsStackParamList, 'EventsList'>>();
+  const { theme } = useAppState();
+  const isDark = theme === "dark";
+  const navigation =
+    useNavigation<
+      NativeStackNavigationProp<EventsStackParamList, "EventsList">
+    >();
   const {
     events: { data, status, error },
     loadEvents,
     currency,
   } = useAppState();
   const { t, language } = useTranslation();
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<(typeof statusFilters)[number]>('all');
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<(typeof statusFilters)[number]>("all");
 
   useEffect(() => {
-    if (status === 'idle') {
+    if (status === "idle") {
       loadEvents();
     }
   }, [status, loadEvents]);
@@ -37,18 +50,19 @@ const EventsListScreen = () => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [event.name, event.venue, event.city].some((field) =>
-          field.toLowerCase().includes(normalizedQuery),
+          field.toLowerCase().includes(normalizedQuery)
         );
-      const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" || event.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
   }, [data, query, statusFilter]);
 
   const handlePress = useCallback(
     (event: Event) => {
-      navigation.navigate('EventDetail', { eventId: event.id });
+      navigation.navigate("EventDetail", { eventId: event.id });
     },
-    [navigation],
+    [navigation]
   );
 
   const renderItem = useCallback(
@@ -61,67 +75,83 @@ const EventsListScreen = () => {
         onPress={() => handlePress(item)}
       />
     ),
-    [currency, handlePress, language, t],
+    [currency, handlePress, language, t]
   );
 
-  const isLoading = status === 'loading' && data.length === 0;
-  const showEmpty = status === 'success' && filteredEvents.length === 0;
+  const isLoading = status === "loading" && data.length === 0;
+  const showEmpty = status === "success" && filteredEvents.length === 0;
+  const backgroundClass = isDark ? "bg-background-dark" : "bg-background-light";
+  const inputClasses = `mb-4 rounded-2xl border px-4 py-3 text-base ${
+    isDark
+      ? "border-border-dark bg-card-dark text-text-dark"
+      : "border-border-light bg-card-light text-text-light"
+  }`;
+  const placeholderColor = isDark ? "#94a3b8" : "#475569";
+  const subtextClass = isDark ? "text-subtext-dark" : "text-subtext-light";
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className={`flex-1 ${backgroundClass}`}>
+      <PageHeader title="Eventos" />
       <View className="flex-1 px-5 pt-4">
-      <Text className="mb-4 text-2xl font-semibold text-text">{t('eventsTitle')}</Text>
+        <TextInput
+          placeholder={t("searchPlaceholder")}
+          placeholderTextColor={placeholderColor}
+          value={query}
+          onChangeText={setQuery}
+          className={inputClasses}
+          accessibilityLabel="Search events"
+        />
 
-      <TextInput
-        placeholder={t('searchPlaceholder')}
-        value={query}
-        onChangeText={setQuery}
-        className="mb-4 rounded-2xl border border-border bg-white px-4 py-3 text-base text-text"
-        accessibilityLabel="Search events"
-      />
-
-      <View className="mb-4 flex-row flex-wrap gap-2">
-        {statusFilters.map((filter) => (
-          <Chip
-            key={filter}
-            label={t(`status_${filter}` as const)}
-            selected={statusFilter === filter}
-            onPress={() => setStatusFilter(filter)}
-          />
-        ))}
-      </View>
-
-      {isLoading && (
-        <View className="mt-10 items-center">
-          <ActivityIndicator size="large" color="#0f5cff" />
-          <Text className="mt-3 text-subtext">{t('loadingLabel')}...</Text>
-        </View>
-      )}
-
-      {status === 'error' && (
-        <View className="mt-6">
-          <EmptyState title="Error" description={error ?? 'Something went wrong'} />
-          <Button label={t('retry')} className="mt-4" onPress={loadEvents} />
-        </View>
-      )}
-
-      {!isLoading && status !== 'error' && (
-        <>
-          {showEmpty ? (
-            <EmptyState title={t('emptyTitle')} description={t('emptyBody')} />
-          ) : (
-            <FlatList
-              data={filteredEvents}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              contentContainerStyle={{ paddingBottom: 64 }}
-              showsVerticalScrollIndicator={false}
-              refreshing={status === 'loading'}
-              onRefresh={loadEvents}
+        <View className="mb-4 flex-row flex-wrap gap-2">
+          {statusFilters.map((filter) => (
+            <Chip
+              key={filter}
+              label={t(`status_${filter}` as const)}
+              selected={statusFilter === filter}
+              onPress={() => setStatusFilter(filter)}
             />
-          )}
-        </>
-      )}
+          ))}
+        </View>
+
+        {isLoading && (
+          <View className="mt-10 items-center">
+            <ActivityIndicator size="large" color="#0f5cff" />
+            <Text className={`mt-3 ${subtextClass}`}>
+              {t("loadingLabel")}...
+            </Text>
+          </View>
+        )}
+
+        {status === "error" && (
+          <View className="mt-6">
+            <EmptyState
+              title="Error"
+              description={error ?? "Something went wrong"}
+            />
+            <Button label={t("retry")} className="mt-4" onPress={loadEvents} />
+          </View>
+        )}
+
+        {!isLoading && status !== "error" && (
+          <>
+            {showEmpty ? (
+              <EmptyState
+                title={t("emptyTitle")}
+                description={t("emptyBody")}
+              />
+            ) : (
+              <FlatList
+                data={filteredEvents}
+                keyExtractor={(item) => item.id}
+                renderItem={renderItem}
+                contentContainerStyle={{ paddingBottom: 64 }}
+                showsVerticalScrollIndicator={false}
+                refreshing={status === "loading"}
+                onRefresh={loadEvents}
+              />
+            )}
+          </>
+        )}
       </View>
     </SafeAreaView>
   );

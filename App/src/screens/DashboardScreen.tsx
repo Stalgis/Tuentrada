@@ -1,211 +1,429 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { BarChart } from 'react-native-chart-kit';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import StatTile from '../components/StatTile';
-import Section from '../components/UI/Section';
-import { useTranslation } from '../hooks/useTranslation';
+// src/screens/DashboardScreen.tsx
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+  StyleSheet,
+  TouchableOpacity,
+  Pressable,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import StatTile from "../components/StatTile";
+import Chip from "../components/UI/Chip";
+import Section from "../components/UI/Section";
+import SalesCalendar from "../components/SalesCalendar";
+import { useTranslation } from "../hooks/useTranslation";
 import {
   DailySalesRow,
   DailySalesSummary,
   EventGeneralStats,
   mockDailySalesSummaries,
   mockEventGeneralStats,
-} from '../data/mockEventAnalytics';
+} from "../data/mockEventAnalytics";
+import { RevenueBarChart } from "../components/RevenueBarChart";
+import { useAppState } from "../store/appState";
+import PageHeader from "../components/UI/PageHeader";
+import RootDrawer from "../components/RootDrawer";
 
-// Number helpers keep formatting consistent across the screen.
+// Helpers
 const formatARS = (amount: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 0,
+  }).format(amount);
 const formatPlainNumber = (amount: number) =>
-  new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(amount);
-const sumRevenue = (days: DailySalesRow[]) => days.reduce((sum, day) => sum + day.revenueARS, 0);
-const sumTickets = (days: DailySalesRow[]) => days.reduce((sum, day) => sum + day.ticketsSold, 0);
+  new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(amount);
+const sumRevenue = (days: DailySalesRow[]) =>
+  days.reduce((sum, day) => sum + day.revenueARS, 0);
+const sumTickets = (days: DailySalesRow[]) =>
+  days.reduce((sum, day) => sum + day.ticketsSold, 0);
 const calcAverageTicket = (totalRevenue: number, totalTickets: number) =>
   totalTickets > 0 ? totalRevenue / totalTickets : 0;
 const findBestDay = (days: DailySalesRow[]) =>
-  days.reduce((best, current) => (current.revenueARS > best.revenueARS ? current : best), days[0]);
+  days.reduce(
+    (best, current) => (current.revenueARS > best.revenueARS ? current : best),
+    days[0]
+  );
 
 const DashboardScreen = () => {
   const { language } = useTranslation();
   const { width } = useWindowDimensions();
+  const [periodNew, setPeriodNew] = useState<"7d" | "30d">("7d");
+  const { theme } = useAppState();
+  const isDark = theme === "dark";
+  const tileClass = isDark
+    ? "bg-white/5 border border-white/10"
+    : "bg-card-light border border-border-light";
 
-  // Selected mock event/session (only one for now).
-  const eventStats: EventGeneralStats = mockEventGeneralStats;
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    () => mockEventGeneralStats[0]?.eventId ?? ""
+  );
+  const [period, setPeriod] = useState<"last7Days" | "last30Days">("last7Days");
 
-  // Fixed period: ultimos 7 dias.
-  const periodSummary: DailySalesSummary = useMemo(
-    () => mockDailySalesSummaries.find((summary) => summary.period === 'last7Days') ?? mockDailySalesSummaries[0],
-    [],
+  const eventStats = useMemo<EventGeneralStats | undefined>(
+    () =>
+      mockEventGeneralStats.find((event) => event.eventId === selectedEventId),
+    [selectedEventId]
+  );
+  const totalRevenueAll = useMemo(
+    () =>
+      mockEventGeneralStats.reduce(
+        (sum, item) => sum + item.totalRevenueARS,
+        0
+      ),
+    []
+  );
+  const totalTicketsAll = useMemo(
+    () =>
+      mockEventGeneralStats.reduce((sum, item) => sum + item.ticketsSold, 0),
+    []
   );
 
-  // Select the last available day by default, reset when period changes.
-  const [selectedDayIndex, setSelectedDayIndex] = useState(() => Math.max(periodSummary.days.length - 1, 0));
-  useEffect(() => {
-    setSelectedDayIndex(Math.max(periodSummary.days.length - 1, 0));
-  }, [periodSummary.days.length]);
+  const periodSummary: DailySalesSummary | undefined = useMemo(
+    () =>
+      mockDailySalesSummaries.find(
+        (summary) =>
+          summary.eventId === selectedEventId && summary.period === period
+      ),
+    [selectedEventId, period]
+  );
 
-  const totalRevenuePeriod = useMemo(() => sumRevenue(periodSummary.days), [periodSummary.days]);
-  const totalTicketsPeriod = useMemo(() => sumTickets(periodSummary.days), [periodSummary.days]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+
+  useEffect(() => {
+    if (periodSummary) {
+      setSelectedDayIndex(Math.max(periodSummary.days.length - 1, 0));
+    }
+  }, [
+    periodSummary?.eventId,
+    periodSummary?.period,
+    periodSummary?.days.length,
+  ]);
+
+  const totalRevenuePeriod = useMemo(
+    () => sumRevenue(periodSummary?.days ?? []),
+    [periodSummary]
+  );
+  const totalTicketsPeriod = useMemo(
+    () => sumTickets(periodSummary?.days ?? []),
+    [periodSummary]
+  );
   const averageTicket = useMemo(
     () => calcAverageTicket(totalRevenuePeriod, totalTicketsPeriod),
-    [totalRevenuePeriod, totalTicketsPeriod],
+    [totalRevenuePeriod, totalTicketsPeriod]
   );
-  const bestDay = useMemo(() => findBestDay(periodSummary.days), [periodSummary.days]);
-  const selectedDay = periodSummary.days[selectedDayIndex];
+  const bestDay = useMemo(
+    () =>
+      periodSummary && periodSummary.days.length > 0
+        ? findBestDay(periodSummary.days)
+        : undefined,
+    [periodSummary]
+  );
 
   const formatDate = useCallback(
     (dateISO: string, options: Intl.DateTimeFormatOptions) => {
-      const locale = language === 'es' ? 'es-AR' : 'en-US';
+      const locale = language === "es" ? "es-AR" : "en-US";
       return new Intl.DateTimeFormat(locale, options).format(new Date(dateISO));
     },
-    [language],
+    [language]
   );
 
-  const chartData = useMemo(() => {
-    const labels = periodSummary.days.map((item) => formatDate(item.date, { day: 'numeric', month: 'short' }));
-    return {
-      labels,
-      datasets: [
-        {
-          data: periodSummary.days.map((item) => item.revenueARS),
-        },
-      ],
-    };
-  }, [periodSummary.days, formatDate]);
-
-  const chartWidth = Math.min(Math.max(width - 32, 300), 900);
+  if (!eventStats || !periodSummary) {
+    return (
+      <RootDrawer>
+        {(openDrawer) => (
+          <SafeAreaView
+            className={`flex-1 ${
+              isDark ? "bg-background-dark" : "bg-background-light"
+            }`}
+          >
+            <PageHeader
+              title="General"
+              leftAccessory={
+                <Pressable
+                  onPress={openDrawer}
+                  accessibilityRole="button"
+                  className="rounded-full bg-card-light p-2 dark:bg-card-dark"
+                >
+                  <Feather
+                    name="menu"
+                    size={20}
+                    color={isDark ? "#e2e8f0" : "#0f172a"}
+                  />
+                </Pressable>
+              }
+            />
+            <View className="flex-1 items-center justify-center px-6">
+              <Text
+                className={`text-lg font-semibold ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                No hay datos para mostrar
+              </Text>
+              <Text
+                className={`mt-2 text-center ${
+                  isDark ? "text-subtext-dark" : "text-subtext-light"
+                }`}
+              >
+                Agrega funciones en mockEventAnalytics.ts para ver el dashboard.
+              </Text>
+            </View>
+          </SafeAreaView>
+        )}
+      </RootDrawer>
+    );
+  }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView className="flex-1 px-5 pt-4" contentInsetAdjustmentBehavior="automatic">
-        {/* Block 0: Header — what event am I looking at? */}
-        <View className="mb-5">
-          <Text className="text-2xl font-semibold text-text">{eventStats.eventName}</Text>
-          <Text className="text-sm text-subtext">
-            {eventStats.venueName}{' '}
-            {formatDate(eventStats.sessionDateTime, { day: '2-digit', month: '2-digit', year: 'numeric' })}{' '}
-            {formatDate(eventStats.sessionDateTime, { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-
-        {/* Block 1: Event global KPIs — total tickets and total money for this event */}
-        <Section title="Resumen del evento">
-          <View className="flex-row flex-wrap gap-4">
-            <StatTile className="flex-1 min-w-[45%]" label="Tickets vendidos" value={eventStats.ticketsSold.toString()} />
-            <StatTile
-              className="flex-1 min-w-[45%]"
-              label="Total recaudado (ARS)"
-              value={formatARS(eventStats.totalRevenueARS)}
-              accent="#0f5cff"
-            />
-            <StatTile className="flex-1 min-w-[45%]" label="Invitaciones" value={eventStats.invitations.toString()} />
-            <StatTile className="flex-1 min-w-[45%]" label="Contactos" value={eventStats.contactsCount.toString()} />
-          </View>
-        </Section>
-
-        {/* Block 2: Performance in period — ultimos 7 dias */}
-        <View className="mt-6">
-          <Text className="mb-3 text-lg font-semibold text-text">Rendimiento (ultimos 7 dias)</Text>
-
-          <View className="mb-4 flex-row flex-wrap gap-3">
-            <StatTile
-              className="flex-1 min-w-[45%]"
-              label="Ingresos ultimos 7 dias"
-              value={formatARS(totalRevenuePeriod)}
-              accent="#0f5cff"
-            />
-            <StatTile
-              className="flex-1 min-w-[45%]"
-              label="Entradas vendidas ultimos 7 dias"
-              value={totalTicketsPeriod.toLocaleString()}
-            />
-            <StatTile
-              className="flex-1 min-w-[45%]"
-              label="Ticket promedio"
-              value={formatARS(Math.round(averageTicket))}
-              accent="#0f9d58"
-            />
-          </View>
-
-          {/* Block 3: Daily bar chart — ingresos diarios (ARS) */}
-          <Text className="mb-2 text-sm font-semibold text-text">Ingresos diarios (ARS)</Text>
-          <BarChart
-            data={chartData}
-            width={chartWidth}
-            height={220}
-            fromZero
-            withInnerLines={false}
-            showValuesOnTopOfBars={false}
-            yAxisLabel=""
-            yAxisSuffix=""
-            chartConfig={{
-              backgroundGradientFrom: '#f8fafc',
-              backgroundGradientTo: '#f8fafc',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(15, 92, 255, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
-              fillShadowGradient: '#0f5cff',
-              fillShadowGradientOpacity: 0.9,
-              propsForLabels: { fontSize: 11 },
-            }}
-            style={{ borderRadius: 16, marginRight: 8 }}
-            segments={4}
-            formatYLabel={(value) => formatPlainNumber(Number(value))}
-            barPercentage={0.42}
-            onDataPointClick={({ index }) => setSelectedDayIndex(index)}
+    <RootDrawer>
+      {(openDrawer) => (
+        <SafeAreaView
+          className={`flex-1 ${
+            isDark ? "bg-background-dark" : "bg-background-light"
+          }`}
+        >
+          <PageHeader
+            title="General"
+            leftAccessory={
+              <Pressable
+                onPress={openDrawer}
+                accessibilityRole="button"
+                className={`rounded-full p-2 ${
+                  isDark ? "bg-card-dark" : "bg-card-light"
+                }`}
+              >
+                <Feather
+                  name="menu"
+                  size={20}
+                  color={isDark ? "#e2e8f0" : "#0f172a"}
+                />
+              </Pressable>
+            }
           />
+          <ScrollView
+            className="flex-1 px-5 pt-4"
+            contentInsetAdjustmentBehavior="automatic"
+          >
+            {/* Resumen general */}
+            <View className="mb-6">
+              <Text
+                className={`text-lg font-semibold ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                Resumen general
+              </Text>
+              <View className="mt-3 flex-row flex-wrap gap-4">
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Total recaudado (ARS)"
+                  value={formatARS(totalRevenueAll)}
+                  accent="#0f5cff"
+                />
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Tickets vendidos"
+                  value={formatPlainNumber(totalTicketsAll)}
+                />
+              </View>
+            </View>
 
-          {/* Block 4: Selected day details + best day */}
-          {selectedDay && (
-            <View className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-subtext">Seleccionar dia</Text>
-              <View className="mt-2 flex-row flex-wrap gap-2">
-                {periodSummary.days.map((day, index) => (
-                  <TouchableOpacity
-                    key={day.date}
-                    className={`min-w-[28%] rounded-2xl border px-3 py-2 ${
-                      selectedDayIndex === index ? 'border-primary-600 bg-primary-50' : 'border-slate-200 bg-white'
-                    }`}
-                    onPress={() => setSelectedDayIndex(index)}
-                  >
-                    <Text className="text-sm font-semibold text-text">
-                      {formatDate(day.date, { day: '2-digit', month: 'short' })}
-                    </Text>
-                    <Text className="text-xs text-subtext">{formatARS(day.revenueARS)}</Text>
-                  </TouchableOpacity>
+            {/* Selector de función */}
+            <View className="mb-6">
+              <Text
+                className={`mb-2 text-sm font-semibold ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                Seleccionar funcion
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {mockEventGeneralStats.map((item) => (
+                  <Chip
+                    key={item.eventId}
+                    label={`${formatDate(item.sessionDateTime, {
+                      month: "short",
+                      day: "numeric",
+                    })}`}
+                    selected={selectedEventId === item.eventId}
+                    onPress={() => setSelectedEventId(item.eventId)}
+                    accessibilityLabel={`Ver KPIs de ${
+                      item.eventName
+                    } ${formatDate(item.sessionDateTime, {
+                      day: "2-digit",
+                      month: "2-digit",
+                    })}`}
+                  />
                 ))}
               </View>
-              <View className="my-3 h-px bg-slate-200" />
-              <Text className="text-xs uppercase tracking-wide text-subtext">
-                {formatDate(selectedDay.date, { weekday: 'short', month: 'short', day: 'numeric' })}
-              </Text>
-              <Text className="mt-1 text-xl font-semibold text-text">{formatARS(selectedDay.revenueARS)}</Text>
-              <Text className="text-xs text-subtext">Ingresos del dia</Text>
-              <View className="mt-3 flex-row items-baseline justify-between">
-                <View>
-                  <Text className="text-lg font-semibold text-primary-700">{selectedDay.ticketsSold}</Text>
-                  <Text className="text-xs text-subtext">Entradas vendidas</Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-base font-semibold text-text">{selectedDay.invitations}</Text>
-                  <Text className="text-xs text-subtext">Invitaciones</Text>
-                </View>
+              <View className="mt-4">
+                <Text
+                  className={`text-2xl font-semibold ${
+                    isDark ? "text-text-dark" : "text-text-light"
+                  }`}
+                >
+                  {eventStats.eventName}
+                </Text>
+                <Text
+                  className={`text-sm ${
+                    isDark ? "text-subtext-dark" : "text-subtext-light"
+                  }`}
+                >
+                  {eventStats.venueName}{" "}
+                  {formatDate(eventStats.sessionDateTime, {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })}{" "}
+                  {formatDate(eventStats.sessionDateTime, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
               </View>
             </View>
-          )}
 
-          {bestDay && (
-            <View className="mt-3">
-              <Text className="text-sm text-subtext">
-                Mejor dia del periodo: {formatDate(bestDay.date, { month: 'short', day: 'numeric' })} •{' '}
-                {formatARS(bestDay.revenueARS)}
+            {/* KPI Tiles */}
+            <View className="mb-4">
+              <Text
+                className={`text-lg font-semibold ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                Resumen del evento
               </Text>
+              <View className="flex-row flex-wrap gap-4">
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Tickets vendidos"
+                  value={eventStats.ticketsSold.toString()}
+                />
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Total recaudado (ARS)"
+                  value={formatARS(eventStats.totalRevenueARS)}
+                  accent="#0f5cff"
+                />
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Invitaciones"
+                  value={eventStats.invitations.toString()}
+                />
+                <StatTile
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Contactos"
+                  value={eventStats.contactsCount.toString()}
+                />
+              </View>
             </View>
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+            {/* Toggle y Bar Chart */}
+            <View
+              className={`mb-4 ${
+                periodNew === "7d" ? "items-center" : "w-full"
+              }`}
+            >
+              <Text
+                className={`text-lg mb-4 text-left w-full font-semibold ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                Ingresos diarios (ARS)
+              </Text>
+              <View
+                style={[
+                  styles.toggleContainer,
+                  {
+                    backgroundColor: isDark ? "#1e293b" : "#e5e7eb",
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    periodNew === "7d" && styles.toggleActive,
+                  ]}
+                  onPress={() => setPeriodNew("7d")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      periodNew === "7d"
+                        ? styles.toggleTextActive
+                        : { color: isDark ? "#94a3b8" : "#333" },
+                    ]}
+                  >
+                    Últimos 7 días
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    periodNew === "30d" && styles.toggleActive,
+                  ]}
+                  onPress={() => setPeriodNew("30d")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      periodNew === "30d"
+                        ? styles.toggleTextActive
+                        : { color: isDark ? "#94a3b8" : "#333" },
+                    ]}
+                  >
+                    Últimos 30 días
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <RevenueBarChart period={periodNew} eventId={selectedEventId} />
+            </View>
+
+            {/* Calendario */}
+            <View className="mb-4">
+              <Text
+                className={`text-lg font-semibold my-4 ${
+                  isDark ? "text-text-dark" : "text-text-light"
+                }`}
+              >
+                Calendario de ventas
+              </Text>
+              <SalesCalendar summary={periodSummary} />
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      )}
+    </RootDrawer>
   );
 };
+
+const styles = StyleSheet.create({
+  toggleContainer: {
+    flexDirection: "row",
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 16,
+    alignSelf: "center",
+  },
+  toggleButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  toggleActive: {
+    backgroundColor: "#0f5cff",
+  },
+  toggleText: {
+    fontWeight: "500",
+  },
+  toggleTextActive: {
+    color: "white",
+  },
+});
 
 export default DashboardScreen;

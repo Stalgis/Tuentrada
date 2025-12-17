@@ -26,6 +26,7 @@ export const darkPalette = {
 
 export type AppTheme = typeof lightPalette;
 export type ThemeName = 'light' | 'dark';
+export type ThemePreference = ThemeName | 'system';
 
 export const lightTheme: AppTheme = lightPalette;
 export const darkTheme: AppTheme = darkPalette;

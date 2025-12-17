@@ -22,7 +22,7 @@ const Button: React.FC<ButtonProps> = ({
   const variantClasses =
     variant === 'primary'
       ? 'bg-primary-600'
-      : 'bg-transparent border border-border';
+      : 'bg-transparent border border-border-light dark:border-border-dark';
   const textClasses = variant === 'primary' ? 'text-white' : 'text-primary-600';
 
   return (

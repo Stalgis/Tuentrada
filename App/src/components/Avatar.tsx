@@ -1,10 +1,11 @@
 import React from 'react';
-import { Text, View, ViewProps } from 'react-native';
+import { Pressable, Text, View, ViewProps } from 'react-native';
 
 type AvatarProps = ViewProps & {
   initials: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  onPress?: () => void;
 };
 
 const sizeMap: Record<NonNullable<AvatarProps['size']>, number> = {
@@ -13,15 +14,33 @@ const sizeMap: Record<NonNullable<AvatarProps['size']>, number> = {
   lg: 64,
 };
 
-const Avatar: React.FC<AvatarProps> = ({ initials, size = 'md', style, className = '', ...rest }) => {
+const Avatar: React.FC<AvatarProps> = ({
+  initials,
+  size = 'md',
+  style,
+  className = '',
+  onPress,
+  ...rest
+}) => {
   const dimension = sizeMap[size];
+  const content = <Text className="text-white font-semibold">{initials}</Text>;
+  const commonProps = {
+    className: `items-center justify-center rounded-full bg-primary-600 ${className}`,
+    style: [{ width: dimension, height: dimension }, style],
+    ...rest,
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} {...commonProps}>
+        {content}
+      </Pressable>
+    );
+  }
+
   return (
-    <View
-      className={`items-center justify-center rounded-full bg-primary-600 ${className}`}
-      style={[{ width: dimension, height: dimension }, style]}
-      {...rest}
-    >
-      <Text className="text-white font-semibold">{initials}</Text>
+    <View {...commonProps}>
+      {content}
     </View>
   );
 };
