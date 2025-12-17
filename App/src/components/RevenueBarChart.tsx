@@ -32,7 +32,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
   const { width: windowWidth } = useWindowDimensions();
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   const screenWidth = windowWidth;
@@ -45,6 +45,15 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setSelectedIndex(null);
+    opacityAnim.setValue(0);
+  }, [eventId, period, dailyData.length, opacityAnim]);
 
   const dailyData: DailyValue[] = useMemo(() => {
     const revenueMap: Record<string, number> = {};
@@ -145,6 +154,10 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
   const lineColor = isDark ? "#60a5fa" : "#0f5cff";
   const tooltipBg = isDark ? "#1e293b" : "#ffffff";
   const tooltipSub = isDark ? "#94a3b8" : "#666";
+  const selectedDay =
+    selectedIndex !== null && dailyData[selectedIndex]
+      ? dailyData[selectedIndex]
+      : null;
 
   return (
     <View style={{ paddingTop: 22 }}>
@@ -172,7 +185,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
             }}
           />
 
-          {selectedIndex !== null && (
+          {selectedDay && (
             <Animated.View
               style={[
                 styles.tooltip,
@@ -185,10 +198,10 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
               ]}
             >
               <Text style={[styles.tooltipDate, { color: tooltipSub }]}>
-                Día {dailyData[selectedIndex].label}
+                Día {selectedDay.label}
               </Text>
               <Text style={[styles.tooltipValue, { color: lineColor }]}>
-                {dailyData[selectedIndex].formatted}
+                {selectedDay.formatted}
               </Text>
               <View
                 style={[styles.tooltipArrow, { borderTopColor: tooltipBg }]}
