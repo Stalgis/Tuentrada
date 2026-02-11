@@ -1,27 +1,27 @@
 import { DefaultTheme, DarkTheme, Theme as NavigationTheme } from '@react-navigation/native';
 
 export const lightPalette = {
-  background: '#f8fafc',
+  background: '#f5f7fb',
   card: '#ffffff',
-  primary: '#0f5cff',
+  primary: '#007bff',
   text: '#0f172a',
-  subtext: '#475569',
-  border: '#e2e8f0',
-  muted: '#f1f5f9',
-  success: '#16a34a',
-  warning: '#eab308',
+  subtext: '#5b6b7e',
+  border: '#d9e3f0',
+  muted: '#eef2f7',
+  success: '#4CAF50',
+  warning: '#ff7043',
 };
 
 export const darkPalette = {
-  background: '#0f172a',
-  card: '#0b1220',
-  primary: '#4f8bff',
-  text: '#e2e8f0',
-  subtext: '#94a3b8',
-  border: '#1e293b',
-  muted: '#111827',
-  success: '#22c55e',
-  warning: '#f59e0b',
+  background: '#011a34',
+  card: '#042450',
+  primary: '#007bff',
+  text: '#f8fafc',
+  subtext: '#b7c6d8',
+  border: '#0b2a52',
+  muted: '#04101f',
+  success: '#4CAF50',
+  warning: '#ff7043',
 };
 
 export type AppTheme = typeof lightPalette;

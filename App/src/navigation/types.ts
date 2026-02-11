@@ -8,6 +8,7 @@ export type RootTabParamList = {
   Dashboard: undefined;
   Events: undefined;
   Ventas: undefined;
+  MedioDePago: undefined;
 };
 
 export type AuthStackParamList = {
@@ -18,4 +19,5 @@ export type AuthStackParamList = {
 export type AppStackParamList = {
   Tabs: undefined;
   Profile: undefined;
+  Settings: undefined;
 };

@@ -9,44 +9,58 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        roboto: ["Roboto"],
+      },
       colors: {
-        primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
+        brand: {
+          dark: "#011a34",
+          darkAlt: "#042450",
+          primary: "#007bff",
+          primaryDark: "#0066cc",
+          success: "#4CAF50",
+          warning: "#ff7043",
+          danger: "#e53935",
         },
-        accent: "#0f5cff",
+        primary: {
+          50: "#eef6ff",
+          100: "#d9ebff",
+          200: "#b6d7ff",
+          300: "#89beff",
+          400: "#5aa2ff",
+          500: "#007bff",
+          600: "#0066cc",
+          700: "#005bb5",
+          800: "#004a94",
+          900: "#003b73",
+        },
+        accent: "#007bff",
+        "surface-light": "#f5f7fb",
+        "surface-dark": "#04101f",
 
         // tokens para light/dark
-        "background-light": "#ffffff",
-        "background-dark": "#020617",
+        "background-light": "#f5f7fb",
+        "background-dark": "#011a34",
 
-        "card-light": "#f8fafc",
-        "card-dark": "#020617",
+        "card-light": "#ffffff",
+        "card-dark": "#042450",
 
-        "border-light": "#e2e8f0",
-        "border-dark": "#1e293b",
+        "border-light": "#d9e3f0",
+        "border-dark": "#0b2a52",
 
         "text-light": "#0f172a",
-        "text-dark": "#ffffff",
+        "text-dark": "#f8fafc",
 
-        "subtext-light": "#475569",
-        "subtext-dark": "#9ca3af",
+        "subtext-light": "#5b6b7e",
+        "subtext-dark": "#b7c6d8",
 
-        muted: "#f1f5f9",
-        border: "#e2e8f0",
+        muted: "#eef2f7",
+        border: "#d9e3f0",
         text: "#0f172a",
-        subtext: "#475569",
+        subtext: "#5b6b7e",
       },
       boxShadow: {
-        card: "0 4px 12px rgba(15, 92, 255, 0.08)",
+        card: "0 12px 30px rgba(1, 26, 52, 0.12)",
       },
     },
   },

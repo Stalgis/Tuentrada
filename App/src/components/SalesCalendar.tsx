@@ -22,7 +22,7 @@ const themeTokens = {
     text: "#0f172a",
     subtext: "#475569",
     border: "#e2e8f0",
-    accent: "#0f5cff",
+    accent: "#007bff",
   },
   dark: {
     background: "#020617",

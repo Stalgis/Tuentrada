@@ -10,6 +10,7 @@ import EventsListScreen from "../screens/EventsListScreen";
 import EventDetailScreen from "../screens/EventDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
+import SettingsScreen from "@/screens/SettingsScreen";
 import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import { getNavigationTheme } from "../lib/theme";
 import {
@@ -22,7 +23,8 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
 import type { AuthStatus } from "../store/auth";
-import VentasScreen from "@/screens/VentasScreen";
+import SectorScreen from "@/screens/SectorScreen";
+import PaymentScreen from "@/screens/PaymentScreen";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -33,7 +35,7 @@ const EventsNavigator = () => (
   <EventsStack.Navigator screenOptions={{ headerShown: false }}>
     <EventsStack.Screen name="EventsList" component={EventsListScreen} />
     <EventsStack.Screen name="EventDetail" component={EventDetailScreen} />
-    <EventsStack.Screen name="Ventas" component={VentasScreen} />
+    <EventsStack.Screen name="Ventas" component={SectorScreen} />
   </EventsStack.Navigator>
 );
 
@@ -57,14 +59,14 @@ const RootNavigator = () => {
   const isDark = theme === "dark";
 
   const tabBarStyle = {
-    backgroundColor: isDark ? "#020617" : "#ffffff",
-    borderTopColor: isDark ? "#1e293b" : "#e2e8f0",
+    backgroundColor: isDark ? "#011a34" : "#ffffff",
+    borderTopColor: isDark ? "#0b2a52" : "#d9e3f0",
     borderTopWidth: 1,
     height: 74,
     paddingTop: 10,
     paddingBottom: 14,
     marginBottom: 10,
-    shadowColor: "#0f172a",
+    shadowColor: "#011a34",
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: -4 },
     shadowRadius: 12,
@@ -74,7 +76,7 @@ const RootNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: isDark ? "#60a5fa" : "#0f5cff",
+        tabBarActiveTintColor: isDark ? "#5aa2ff" : "#007bff",
         tabBarInactiveTintColor: isDark ? "#94a3b8" : "#94a3b8",
         tabBarStyle,
         tabBarItemStyle: { paddingBottom: 2 },
@@ -103,11 +105,21 @@ const RootNavigator = () => {
       />
       <Tab.Screen
         name="Ventas"
-        component={VentasScreen}
+        component={SectorScreen}
         options={{
           tabBarLabel: t("ventasTitle"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ticket-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="MedioDePago"
+        component={PaymentScreen}
+        options={{
+          tabBarLabel: t("paymentMethodsTitle"),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="card-outline" size={size} color={color} />
           ),
         }}
       />
@@ -118,6 +130,7 @@ const RootNavigator = () => {
     <AppStack.Navigator screenOptions={{ headerShown: false }}>
       <AppStack.Screen name="Tabs" component={TabsNavigator} />
       <AppStack.Screen name="Profile" component={ProfileScreen} />
+      <AppStack.Screen name="Settings" component={SettingsScreen} />
     </AppStack.Navigator>
   );
 
@@ -125,7 +138,7 @@ const RootNavigator = () => {
 
   const renderSplash = () => (
     <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-      <ActivityIndicator size="large" color="#0f5cff" />
+      <ActivityIndicator size="large" color="#007bff" />
     </View>
   );
 

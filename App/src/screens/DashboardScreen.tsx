@@ -58,6 +58,9 @@ const DashboardScreen = () => {
   const tileClass = isDark
     ? "bg-white/5 border border-white/10"
     : "bg-card-light border border-border-light";
+  const chipSelectedColors = isDark
+    ? { background: "#007bff", border: "#007bff", text: "#ffffff" }
+    : { background: "#007bff", border: "#007bff", text: "#ffffff" };
 
   const [selectedEventId, setSelectedEventId] = useState<string>(
     () => mockEventGeneralStats[0]?.eventId ?? ""
@@ -223,7 +226,7 @@ const DashboardScreen = () => {
                   className={`flex-1 min-w-[45%] ${tileClass}`}
                   label="Total recaudado (ARS)"
                   value={formatARS(totalRevenueAll)}
-                  accent="#0f5cff"
+                  accent="#007bff"
                 />
                 <StatTile
                   className={`flex-1 min-w-[45%] ${tileClass}`}
@@ -251,6 +254,7 @@ const DashboardScreen = () => {
                       day: "numeric",
                     })}`}
                     selected={selectedEventId === item.eventId}
+                    selectedColors={chipSelectedColors}
                     onPress={() => setSelectedEventId(item.eventId)}
                     accessibilityLabel={`Ver KPIs de ${
                       item.eventName
@@ -307,7 +311,7 @@ const DashboardScreen = () => {
                   className={`flex-1 min-w-[45%] ${tileClass}`}
                   label="Total recaudado (ARS)"
                   value={formatARS(eventStats.totalRevenueARS)}
-                  accent="#0f5cff"
+                  accent="#007bff"
                 />
                 <StatTile
                   className={`flex-1 min-w-[45%] ${tileClass}`}
@@ -383,18 +387,6 @@ const DashboardScreen = () => {
 
               <RevenueBarChart period={periodNew} eventId={selectedEventId} />
             </View>
-
-            {/* Calendario */}
-            <View className="mb-4">
-              <Text
-                className={`text-lg font-semibold my-4 ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                Calendario de ventas
-              </Text>
-              <SalesCalendar summary={periodSummary} />
-            </View>
           </ScrollView>
         </SafeAreaView>
       )}
@@ -416,7 +408,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   toggleActive: {
-    backgroundColor: "#0f5cff",
+    backgroundColor: "#007bff",
   },
   toggleText: {
     fontWeight: "500",

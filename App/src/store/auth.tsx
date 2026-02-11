@@ -115,6 +115,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const persistTokens = useCallback(async (tokens: AuthTokens) => {
     const refreshToken = tokens.refreshToken ?? null;
     refreshTokenRef.current = refreshToken;
+    console.log('[Auth] Tokens recibidos', tokens);
 
     if (refreshToken) {
       await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);

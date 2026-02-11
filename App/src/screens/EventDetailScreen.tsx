@@ -82,7 +82,7 @@ const EventDetailScreen = () => {
   if (loading || !event) {
     return (
       <View className={`flex-1 items-center justify-center ${backgroundClass}`}>
-        <ActivityIndicator size="large" color="#0f5cff" />
+        <ActivityIndicator size="large" color="#007bff" />
         <Text className={`mt-3 ${subtextClass}`}>{t('loadingLabel')}...</Text>
       </View>
     );

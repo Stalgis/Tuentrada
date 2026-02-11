@@ -86,7 +86,7 @@ const EventCard: React.FC<EventCardProps> = ({
             label={statusLabel}
             size="sm"
             className={`border-0 ${statusAccent[event.status]}`}
-            textClassName={isDark ? 'text-white' : ''}
+            textClassName={isDark ? "text-white" : ""}
             disabled
           />
         </View>

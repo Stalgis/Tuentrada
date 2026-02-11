@@ -46,15 +46,6 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     };
   }, []);
 
-  useEffect(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    setSelectedIndex(null);
-    opacityAnim.setValue(0);
-  }, [eventId, period, dailyData.length, opacityAnim]);
-
   const dailyData: DailyValue[] = useMemo(() => {
     const revenueMap: Record<string, number> = {};
     const periodKey = period === "7d" ? "last7Days" : "last30Days";
@@ -88,6 +79,15 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     });
   }, [period, eventId]);
 
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setSelectedIndex(null);
+    opacityAnim.setValue(0);
+  }, [eventId, period, dailyData.length, opacityAnim]);
+
   const maxValue = useMemo(() => {
     if (!dailyData.length) return 0;
     const m = Math.max(...dailyData.map((d) => d.value));
@@ -95,7 +95,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
   }, [dailyData]);
 
   const barChartData = useMemo(() => {
-    const baseColor = isDark ? "#60a5fa" : "#0f5cff";
+    const baseColor = isDark ? "#5aa2ff" : "#007bff";
     const selectedColor = isDark ? "#93c5fd" : "#5a8dff";
     const gradientColor = isDark ? "#93c5fd" : "#64b0ff";
 
@@ -151,7 +151,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     }));
   }, [dailyData]);
 
-  const lineColor = isDark ? "#60a5fa" : "#0f5cff";
+  const lineColor = isDark ? "#5aa2ff" : "#007bff";
   const tooltipBg = isDark ? "#1e293b" : "#ffffff";
   const tooltipSub = isDark ? "#94a3b8" : "#666";
   const selectedDay =
@@ -220,7 +220,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
           isAnimated
           animationDuration={650}
           thickness={3}
-          dataPointsColor={isDark ? "#93c5fd" : "#0f5cff"}
+          dataPointsColor={isDark ? "#93c5fd" : "#007bff"}
           color={lineColor}
           maxValue={maxValue}
           noOfSections={4}

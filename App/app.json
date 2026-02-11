@@ -11,14 +11,17 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Usamos Face ID para proteger tu cuenta."
+        "NSFaceIDUsageDescription": "Usamos Face ID para proteger tu cuenta.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.anonymous.App"
     },
     "android": {
       "permissions": [
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -46,7 +49,18 @@
           }
         }
       ],
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir a la app usar Face ID para ingresar."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a30ac99e-701a-484b-88a1-4d62d06370e3"
+      }
+    }
   }
 }

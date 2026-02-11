@@ -115,7 +115,7 @@ const EventsListScreen = () => {
 
         {isLoading && (
           <View className="mt-10 items-center">
-            <ActivityIndicator size="large" color="#0f5cff" />
+            <ActivityIndicator size="large" color="#007bff" />
             <Text className={`mt-3 ${subtextClass}`}>
               {t("loadingLabel")}...
             </Text>
