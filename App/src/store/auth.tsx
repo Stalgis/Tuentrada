@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   createContext,
   useContext,
   useState,
@@ -186,9 +186,15 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       try {
         const response = await authApi.login(email.trim(), password);
         if (response.status === 'needsPasswordChange') {
+          const sessionToken = (response as { sessionToken: string }).sessionToken;
+          await persistTokens({
+            accessToken: sessionToken,
+            refreshToken: null,
+            expiresAt: undefined,
+          });
           setUser(response.user);
-          setSessionToken((response as unknown as { sessionToken?: string }).sessionToken);
-          setStatus('needsPasswordChange');
+          setStatus('authenticated');
+          setSessionToken(undefined);
           return;
         }
         await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
@@ -196,7 +202,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         setLoading(false);
       }
     },
-    [handleAuthSuccess],
+    [handleAuthSuccess, persistTokens],
   );
 
   const changePassword = useCallback(
