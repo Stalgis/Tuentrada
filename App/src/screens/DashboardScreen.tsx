@@ -94,15 +94,12 @@ const DashboardScreen = () => {
 
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
+  const daysLength = periodSummary?.days?.length ?? 0;
   useEffect(() => {
-    if (periodSummary) {
-      setSelectedDayIndex(Math.max(periodSummary.days.length - 1, 0));
+    if (daysLength > 0) {
+      setSelectedDayIndex(Math.max(daysLength - 1, 0));
     }
-  }, [
-    periodSummary?.eventId,
-    periodSummary?.period,
-    periodSummary?.days.length,
-  ]);
+  }, [periodSummary?.eventId, periodSummary?.period, daysLength]);
 
   const totalRevenuePeriod = useMemo(
     () => sumRevenue(periodSummary?.days ?? []),
@@ -118,7 +115,7 @@ const DashboardScreen = () => {
   );
   const bestDay = useMemo(
     () =>
-      periodSummary && periodSummary.days.length > 0
+      periodSummary?.days?.length
         ? findBestDay(periodSummary.days)
         : undefined,
     [periodSummary]
