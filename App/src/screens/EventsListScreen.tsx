@@ -44,9 +44,10 @@ const EventsListScreen = () => {
     }
   }, [status, loadEvents]);
 
+  const safeData = data ?? [];
   const filteredEvents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return data.filter((event) => {
+    return safeData.filter((event) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [event.name, event.venue, event.city].some((field) =>
@@ -56,7 +57,7 @@ const EventsListScreen = () => {
         statusFilter === "all" || event.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [data, query, statusFilter]);
+  }, [safeData, query, statusFilter]);
 
   const handlePress = useCallback(
     (event: Event) => {
@@ -78,7 +79,7 @@ const EventsListScreen = () => {
     [currency, handlePress, language, t]
   );
 
-  const isLoading = status === "loading" && data.length === 0;
+  const isLoading = status === "loading" && safeData.length === 0;
   const showEmpty = status === "success" && filteredEvents.length === 0;
   const backgroundClass = isDark ? "bg-background-dark" : "bg-background-light";
   const inputClasses = `mb-4 rounded-2xl border px-4 py-3 text-base ${

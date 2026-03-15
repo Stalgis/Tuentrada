@@ -330,11 +330,11 @@ const VentasScreen = () => {
           </View>
         </View>
 
-        {filteredSales.length === 0 ? (
+        {(filteredSales?.length ?? 0) === 0 ? (
           <EmptyState title={t("emptyTitle")} description={t("emptyBody")} />
         ) : (
           <FlatList
-            data={filteredSales}
+            data={filteredSales ?? []}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <SaleCard

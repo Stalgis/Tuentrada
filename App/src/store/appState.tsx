@@ -103,10 +103,11 @@ export const useEventMetrics = (): EventMetrics => {
     events: { data },
   } = useAppState();
 
+  const safeData = data ?? [];
   return useMemo(() => {
-    const upcoming = data.filter((event) => new Date(event.dateISO).getTime() > Date.now()).length;
-    const ticketsSold = data.reduce((acc, event) => acc + event.ticketsSold, 0);
-    const totalRevenueARS = data.reduce((acc, event) => acc + event.ticketsSold * event.ticketPriceARS, 0);
+    const upcoming = safeData.filter((event) => new Date(event.dateISO).getTime() > Date.now()).length;
+    const ticketsSold = safeData.reduce((acc, event) => acc + event.ticketsSold, 0);
+    const totalRevenueARS = safeData.reduce((acc, event) => acc + event.ticketsSold * event.ticketPriceARS, 0);
     return { upcoming, ticketsSold, totalRevenueARS };
-  }, [data]);
+  }, [safeData]);
 };
