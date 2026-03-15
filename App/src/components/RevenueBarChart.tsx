@@ -53,9 +53,10 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     const matched = mockDailySalesSummaries.find(
       (s) => s.eventId === eventId && s.period === periodKey
     );
-    if (!matched) return [];
+    const days = matched?.days ?? [];
+    if (!matched || days.length === 0) return [];
 
-    for (const d of matched.days) {
+    for (const d of days) {
       revenueMap[d.date] = (revenueMap[d.date] || 0) + d.revenueARS;
     }
 
@@ -79,6 +80,8 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     });
   }, [period, eventId]);
 
+  const safeDailyData = dailyData ?? [];
+
   useEffect(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -86,20 +89,20 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     }
     setSelectedIndex(null);
     opacityAnim.setValue(0);
-  }, [eventId, period, dailyData.length, opacityAnim]);
+  }, [eventId, period, safeDailyData.length, opacityAnim]);
 
   const maxValue = useMemo(() => {
-    if (!dailyData.length) return 0;
-    const m = Math.max(...dailyData.map((d) => d.value));
+    if (!safeDailyData.length) return 0;
+    const m = Math.max(...safeDailyData.map((d) => d.value));
     return m * 1.2;
-  }, [dailyData]);
+  }, [safeDailyData]);
 
   const barChartData = useMemo(() => {
     const baseColor = isDark ? "#5aa2ff" : "#007bff";
     const selectedColor = isDark ? "#93c5fd" : "#5a8dff";
     const gradientColor = isDark ? "#93c5fd" : "#64b0ff";
 
-    return dailyData.map((item, index) => ({
+    return safeDailyData.map((item, index) => ({
       value: item.value,
       label: item.label,
       frontColor: selectedIndex === index ? selectedColor : baseColor,
@@ -119,7 +122,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
         }, 3000);
       },
     }));
-  }, [dailyData, selectedIndex, isDark, opacityAnim]);
+  }, [safeDailyData, selectedIndex, isDark, opacityAnim]);
 
   const barInitialSpacing = useMemo(() => {
     const count = barChartData.length;
@@ -142,21 +145,21 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
   }, [selectedIndex, chartWidth, barInitialSpacing]);
 
   const lineChartData = useMemo(() => {
-    return dailyData.map((item, index) => ({
+    return safeDailyData.map((item, index) => ({
       value: item.value,
       label: index % 5 === 0 ? item.label : "",
       date: item.date,
       fullLabel: item.fullLabel,
       formatted: item.formatted,
     }));
-  }, [dailyData]);
+  }, [safeDailyData]);
 
   const lineColor = isDark ? "#5aa2ff" : "#007bff";
   const tooltipBg = isDark ? "#1e293b" : "#ffffff";
   const tooltipSub = isDark ? "#94a3b8" : "#666";
   const selectedDay =
-    selectedIndex !== null && dailyData[selectedIndex]
-      ? dailyData[selectedIndex]
+    selectedIndex !== null && safeDailyData[selectedIndex]
+      ? safeDailyData[selectedIndex]
       : null;
 
   return (

@@ -11,7 +11,6 @@ import EventDetailScreen from "../screens/EventDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SettingsScreen from "@/screens/SettingsScreen";
-import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import { getNavigationTheme } from "../lib/theme";
 import {
   EventsStackParamList,
@@ -22,7 +21,6 @@ import {
 import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
-import type { AuthStatus } from "../store/auth";
 import SectorScreen from "@/screens/SectorScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
 
@@ -39,16 +37,9 @@ const EventsNavigator = () => (
   </EventsStack.Navigator>
 );
 
-const AuthNavigator = ({ status }: { status: AuthStatus }) => (
-  <AuthStack.Navigator key={status} screenOptions={{ headerShown: false }}>
-    {status === "needsPasswordChange" ? (
-      <AuthStack.Screen
-        name="ChangePassword"
-        component={ChangePasswordScreen}
-      />
-    ) : (
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-    )}
+const AuthNavigator = () => (
+  <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Screen name="Login" component={LoginScreen} />
   </AuthStack.Navigator>
 );
 
@@ -134,7 +125,7 @@ const RootNavigator = () => {
     </AppStack.Navigator>
   );
 
-  const renderAuth = () => <AuthNavigator status={status} />;
+  const renderAuth = () => <AuthNavigator />;
 
   const renderSplash = () => (
     <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">

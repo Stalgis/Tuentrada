@@ -328,7 +328,7 @@ export default function PaymentMethodScreen() {
 
             <View style={styles.filterBlock}>
               <Text style={[styles.filterLabel, { color: colors.subtext }]}>
-                FunciA3n
+                Función
               </Text>
               <SelectList
                 setSelected={(key: string) => setSelectedSessionId(String(key))}
@@ -342,7 +342,7 @@ export default function PaymentMethodScreen() {
                       }
                     : undefined
                 }
-                placeholder="Selecciona una funciA3n"
+                placeholder="Selecciona una función"
                 search={false}
                 arrowicon={
                   <Ionicons
