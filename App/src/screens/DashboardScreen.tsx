@@ -58,9 +58,11 @@ const DashboardScreen = () => {
   const tileClass = isDark
     ? "bg-white/5 border border-white/10"
     : "bg-card-light border border-border-light";
-  const chipSelectedColors = isDark
-    ? { background: "#007bff", border: "#007bff", text: "#ffffff" }
-    : { background: "#007bff", border: "#007bff", text: "#ffffff" };
+  const chipSelectedColors = {
+    background: "#007bff",
+    border: "#0066cc",
+    text: "#ffffff",
+  };
 
   const [selectedEventId, setSelectedEventId] = useState<string>(
     () => mockEventGeneralStats[0]?.eventId ?? ""
@@ -246,24 +248,32 @@ const DashboardScreen = () => {
                 Seleccionar funcion
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {mockEventGeneralStats.map((item) => (
-                  <Chip
-                    key={item.eventId}
-                    label={`${formatDate(item.sessionDateTime, {
-                      month: "short",
-                      day: "numeric",
-                    })}`}
-                    selected={selectedEventId === item.eventId}
-                    selectedColors={chipSelectedColors}
-                    onPress={() => setSelectedEventId(item.eventId)}
-                    accessibilityLabel={`Ver KPIs de ${
-                      item.eventName
-                    } ${formatDate(item.sessionDateTime, {
-                      day: "2-digit",
-                      month: "2-digit",
-                    })}`}
-                  />
-                ))}
+                {mockEventGeneralStats.map((item) => {
+                  const isSelected = selectedEventId === item.eventId;
+                  return (
+                    <Chip
+                      key={item.eventId}
+                      label={`${formatDate(item.sessionDateTime, {
+                        month: "short",
+                        day: "numeric",
+                      })}`}
+                      selected={isSelected}
+                      selectedColors={chipSelectedColors}
+                      className={
+                        isSelected
+                          ? "bg-primary-500 border-primary-600"
+                          : "bg-transparent border-primary-500"
+                      }
+                      onPress={() => setSelectedEventId(item.eventId)}
+                      accessibilityLabel={`Ver KPIs de ${
+                        item.eventName
+                      } ${formatDate(item.sessionDateTime, {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}`}
+                    />
+                  );
+                })}
               </View>
               <View className="mt-4">
                 <Text
@@ -326,6 +336,31 @@ const DashboardScreen = () => {
               </View>
             </View>
 
+            <View className="mb-3 mt-1">
+              <Text
+                className={`text-sm font-semibold mb-2 ${
+                  isDark ? "text-subtext-dark" : "text-subtext-light"
+                }`}
+              >
+                Resumen Semanal
+              </Text>
+              <View className="flex-row flex-wrap gap-3">
+                <StatTile
+                  size="sm"
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Tickets vendidos (Semanales)"
+                  value={eventStats.ticketsSold.toString()}
+                  accent={isDark ? "#e2e8f0" : "#0f172a"}
+                />
+                <StatTile
+                  size="sm"
+                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  label="Total recaudado (ARS) (Semanales)"
+                  value={formatARS(eventStats.totalRevenueARS)}
+                  accent={isDark ? "#e2e8f0" : "#0f172a"}
+                />
+              </View>
+            </View>
             {/* Toggle y Bar Chart */}
             <View
               className={`mb-4 ${

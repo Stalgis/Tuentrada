@@ -6,12 +6,11 @@ import {
   Text,
   View,
   useWindowDimensions,
-  Platform,
-  Modal,
   Pressable,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { getMockPaymentMethodsForSession } from "../data/MockPaymentMethod";
+import { SelectList } from "react-native-dropdown-select-list";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   mockEventSectorSales,
@@ -22,7 +21,6 @@ import PageHeader from "../components/UI/PageHeader";
 
 type AnyEvent = EventSectorSalesMock;
 
-type Option = { label: string; value: string };
 
 // Ajustá este type a tu data real si cambia el nombre de campos
 type PaymentRow = {
@@ -47,186 +45,6 @@ function getPaymentRowsForSession(session: any) {
     salesCount: p.salesCount,
     revenueARS: p.revenueARS,
   }));
-}
-
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-  colors,
-  isDark,
-}: {
-  label: string;
-  value: string;
-  options: Option[];
-  onChange: (v: string) => void;
-  colors: {
-    background: string;
-    card: string;
-    border: string;
-    text: string;
-    subtext: string;
-    headBg: string;
-    rowBorder: string;
-    buttonBg: string;
-    buttonText: string;
-  };
-  isDark: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const locked = options.length <= 1;
-  const selectedLabel =
-    options.find((o) => o.value === value)?.label ?? options[0]?.label ?? "—";
-
-  const FIELD_HEIGHT = 46;
-  const IOS_WHEEL_HEIGHT = 216;
-
-  const inputBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
-
-  if (Platform.OS === "ios") {
-    return (
-      <View style={styles.filterBlock}>
-        <Text style={[styles.filterLabel, { color: colors.subtext }]}>
-          {label}
-        </Text>
-
-        <Pressable
-          disabled={locked}
-          onPress={() => setOpen(true)}
-          style={[
-            styles.selectWrap,
-            {
-              height: FIELD_HEIGHT,
-              borderColor: colors.border,
-              backgroundColor: inputBg,
-              opacity: locked ? 0.7 : 1,
-            },
-          ]}
-        >
-          <Text
-            numberOfLines={1}
-            style={[styles.selectText, { color: colors.text }]}
-          >
-            {selectedLabel}
-          </Text>
-
-          {!locked && (
-            <Text
-              pointerEvents="none"
-              style={[styles.chevron, { color: colors.subtext }]}
-            >
-              ▾
-            </Text>
-          )}
-        </Pressable>
-
-        <Modal visible={open} animationType="slide" transparent>
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={() => setOpen(false)}
-          >
-            <Pressable
-              style={[
-                styles.sheet,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-              onPress={() => {}}
-            >
-              <View style={styles.sheetHeader}>
-                <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                  Seleccionar {label.toLowerCase()}
-                </Text>
-
-                <Pressable onPress={() => setOpen(false)}>
-                  <Text style={[styles.sheetDone, { color: colors.subtext }]}>
-                    Listo
-                  </Text>
-                </Pressable>
-              </View>
-
-              <View style={{ height: IOS_WHEEL_HEIGHT }}>
-                <Picker
-                  selectedValue={value}
-                  onValueChange={(v) => onChange(String(v))}
-                  style={{ height: IOS_WHEEL_HEIGHT, color: colors.text }}
-                  itemStyle={{ fontSize: 16 }}
-                >
-                  {options.map((o) => (
-                    <Picker.Item
-                      key={o.value}
-                      label={o.label}
-                      value={o.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.filterBlock}>
-      <Text style={[styles.filterLabel, { color: colors.subtext }]}>
-        {label}
-      </Text>
-
-      <View
-        style={[
-          styles.selectWrap,
-          {
-            height: FIELD_HEIGHT,
-            borderColor: colors.border,
-            backgroundColor: inputBg,
-            opacity: locked ? 0.7 : 1,
-          },
-        ]}
-      >
-        {locked ? (
-          <Text
-            numberOfLines={1}
-            style={[styles.selectText, { color: colors.text }]}
-          >
-            {selectedLabel}
-          </Text>
-        ) : (
-          <>
-            <Picker
-              selectedValue={value}
-              onValueChange={(v) => onChange(String(v))}
-              mode="dropdown"
-              dropdownIconColor="transparent"
-              style={[
-                styles.picker,
-                { height: FIELD_HEIGHT, color: colors.text },
-              ]}
-              itemStyle={styles.pickerItem}
-            >
-              {options.map((o) => (
-                <Picker.Item
-                  key={o.value}
-                  label={o.label}
-                  value={o.value}
-                  color={colors.text}
-                />
-              ))}
-            </Picker>
-
-            <Text
-              pointerEvents="none"
-              style={[styles.chevron, { color: colors.subtext }]}
-            >
-              ▾
-            </Text>
-          </>
-        )}
-      </View>
-    </View>
-  );
 }
 
 export default function PaymentMethodScreen() {
@@ -312,6 +130,11 @@ export default function PaymentMethodScreen() {
     return `${day}/${month}/${year} ${hours12}:${minutes} ${suffix}`;
   };
 
+  const truncateLabel = (label: string, maxLength: number) => {
+    if (label.length <= maxLength) return label;
+    return `${label.slice(0, Math.max(0, maxLength - 3))}...`;
+  };
+
   const sessionOptions = useMemo(() => {
     const base = [{ id: "ALL", label: "Todo" }];
     const extra =
@@ -331,23 +154,29 @@ export default function PaymentMethodScreen() {
           )?.sessionDateTime ?? ""
         );
 
-  const eventOptions: Option[] = useMemo(
+  const eventSelectData = useMemo(
     () =>
       events.map((e) => ({
-        label: e.eventName,
-        value: String(e.eventId),
+        key: String(e.eventId),
+        value: truncateLabel(e.eventName, 30),
       })),
     [events]
   );
 
-  const functionOptions: Option[] = useMemo(
+  const sessionSelectData = useMemo(
     () =>
       sessionOptions.map((o) => ({
-        label: o.label,
-        value: String(o.id),
+        key: String(o.id),
+        value: o.label,
       })),
     [sessionOptions]
   );
+
+  const defaultEventOption =
+    eventSelectData.find((d) => d.key === String(selectedEventId)) ?? undefined;
+  const defaultSessionOption =
+    sessionSelectData.find((d) => d.key === String(selectedSessionId)) ??
+    undefined;
 
   // Agregación: Todo (todas las funciones) o una sola función
   const paymentRows: PaymentRow[] = useMemo(() => {
@@ -445,23 +274,109 @@ export default function PaymentMethodScreen() {
           </Text>
 
           <View style={styles.filtersRow}>
-            <SelectField
-              label="Evento"
-              value={selectedEventId}
-              options={eventOptions}
-              onChange={(v) => setSelectedEventId(v)}
-              colors={colors}
-              isDark={isDark}
-            />
+            <View style={styles.filterBlock}>
+              <Text style={[styles.filterLabel, { color: colors.subtext }]}>
+                Evento
+              </Text>
+              <SelectList
+                setSelected={(key: string) => setSelectedEventId(String(key))}
+                data={eventSelectData}
+                save="key"
+                defaultOption={
+                  defaultEventOption
+                    ? {
+                        key: defaultEventOption.key,
+                        value: defaultEventOption.value,
+                      }
+                    : undefined
+                }
+                placeholder="Selecciona un evento"
+                search={false}
+                arrowicon={
+                  <Ionicons
+                    name="chevron-down"
+                    size={18}
+                    color={colors.subtext}
+                    style={{ marginTop: 5 }}
+                  />
+                }
+                boxStyles={StyleSheet.flatten([
+                  styles.selectWrap,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    height: 50,
+                  },
+                ])}
+                inputStyles={StyleSheet.flatten([
+                  styles.picker,
+                  {
+                    color: colors.text,
+                    height: 50,
+                    marginTop: 5,
+                  },
+                ])}
+                dropdownStyles={{
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                }}
+                dropdownTextStyles={{
+                  color: colors.text,
+                }}
+              />
+            </View>
 
-            <SelectField
-              label="Función"
-              value={selectedSessionId}
-              options={functionOptions}
-              onChange={(v) => setSelectedSessionId(v)}
-              colors={colors}
-              isDark={isDark}
-            />
+            <View style={styles.filterBlock}>
+              <Text style={[styles.filterLabel, { color: colors.subtext }]}>
+                FunciA3n
+              </Text>
+              <SelectList
+                setSelected={(key: string) => setSelectedSessionId(String(key))}
+                data={sessionSelectData}
+                save="key"
+                defaultOption={
+                  defaultSessionOption
+                    ? {
+                        key: defaultSessionOption.key,
+                        value: defaultSessionOption.value,
+                      }
+                    : undefined
+                }
+                placeholder="Selecciona una funciA3n"
+                search={false}
+                arrowicon={
+                  <Ionicons
+                    name="chevron-down"
+                    size={18}
+                    color={colors.subtext}
+                    style={{ marginTop: 5 }}
+                  />
+                }
+                boxStyles={StyleSheet.flatten([
+                  styles.selectWrap,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    height: 50,
+                  },
+                ])}
+                inputStyles={StyleSheet.flatten([
+                  styles.picker,
+                  {
+                    color: colors.text,
+                    height: 50,
+                    marginTop: 5,
+                  },
+                ])}
+                dropdownStyles={{
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                }}
+                dropdownTextStyles={{
+                  color: colors.text,
+                }}
+              />
+            </View>
           </View>
 
           {/* Resumen claro para el organizador */}

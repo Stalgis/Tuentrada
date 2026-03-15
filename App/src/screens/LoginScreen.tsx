@@ -104,7 +104,8 @@ const LoginScreen = () => {
 
         <Button
           label={t("loginButton")}
-          className="mt-6"
+          variant="primary"
+          className="mt-6 bg-primary-500"
           onPress={handleSubmit}
           loading={loading}
         />

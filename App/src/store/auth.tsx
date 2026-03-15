@@ -189,7 +189,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         if (response.status === 'needsPasswordChange') {
           setUser(response.user);
           setSessionToken((response as unknown as { sessionToken?: string }).sessionToken);
-          setStatus('needsPasswordChange');
+          setStatus('authenticated');
           return;
         }
         await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
