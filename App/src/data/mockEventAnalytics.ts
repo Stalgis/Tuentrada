@@ -32,7 +32,7 @@ export type DailySalesSummary = {
 export const mockEventGeneralStats: EventGeneralStats[] = [
   {
     eventId: "event-1",
-    eventName: "Charlie y la Fabrica de Chocolate",
+    eventName: "Charlie y la Fábrica de Chocolate",
     venueName: "Teatro Gran Rex",
     sessionDateTime: "2026-06-07T18:00:00-03:00",
     ticketsSold: 282,
@@ -43,7 +43,7 @@ export const mockEventGeneralStats: EventGeneralStats[] = [
 
   {
     eventId: "event-2",
-    eventName: "Charlie y la Fabrica de Chocolate",
+    eventName: "Charlie y la Fábrica de Chocolate",
     venueName: "Teatro Gran Rex",
     sessionDateTime: "2026-06-08T18:00:00-03:00",
     ticketsSold: 160,

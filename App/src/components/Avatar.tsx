@@ -5,6 +5,7 @@ type AvatarProps = ViewProps & {
   initials: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  textClassName?: string;
   onPress?: () => void;
 };
 
@@ -19,11 +20,16 @@ const Avatar: React.FC<AvatarProps> = ({
   size = 'md',
   style,
   className = '',
+  textClassName = '',
   onPress,
   ...rest
 }) => {
   const dimension = sizeMap[size];
-  const content = <Text className="text-white font-semibold">{initials}</Text>;
+  const content = (
+    <Text className={`font-semibold ${textClassName || "text-white"}`}>
+      {initials}
+    </Text>
+  );
   const commonProps = {
     className: `items-center justify-center rounded-full bg-primary-600 ${className}`,
     style: [{ width: dimension, height: dimension }, style],

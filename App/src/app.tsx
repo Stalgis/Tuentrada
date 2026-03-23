@@ -20,7 +20,7 @@ const ThemedContainer = ({ children }: { children: React.ReactNode }) => {
   }, [theme, setColorScheme]);
 
   return (
-    <View className={`flex-1 ${isDark ? "dark bg-dark" : "bg-light"}`}>
+    <View className={`flex-1 ${isDark ? "bg-background-dark" : "bg-background-light"}`}>
       {children}
       <StatusBar style={isDark ? "light" : "dark"} />
     </View>

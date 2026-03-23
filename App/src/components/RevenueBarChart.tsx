@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Animated,
   useWindowDimensions,
 } from "react-native";
@@ -20,7 +19,7 @@ interface Props {
 
 interface DailyValue {
   date: string; // ISO date string
-  label: string; // day of month (e.g. "17")
+  label: string; // compact x-axis label
   value: number;
   formatted: string; // "$1.234"
   fullLabel: string; // "17/12"
@@ -35,10 +34,24 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  const screenWidth = windowWidth;
-  const chartWidth = Math.max(220, windowWidth - 32);
-  const barWidth = 28;
-  const barSpacing = 16;
+  const chartWidth = Math.max(220, windowWidth - 72);
+  const barWidth = 24;
+  const barSpacing = 12;
+  const barChartHeight = 150;
+  const lineChartHeight = 160;
+
+  const formatAxisDate = (date: Date) =>
+    new Intl.DateTimeFormat("es-AR", {
+      day: "numeric",
+      month: "short",
+    })
+      .format(date)
+      .replace(".", "")
+      .split(" ")
+      .map((part, index) =>
+        index === 1 ? part.charAt(0).toUpperCase() + part.slice(1) : part
+      )
+      .join(" ");
 
   useEffect(() => {
     return () => {
@@ -53,10 +66,16 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     const matched = mockDailySalesSummaries.find(
       (s) => s.eventId === eventId && s.period === periodKey
     );
-    const days = matched?.days ?? [];
-    if (!matched || days.length === 0) return [];
+    const fallbackThirtyDay = mockDailySalesSummaries.find(
+      (s) => s.eventId === eventId && s.period === "last30Days"
+    );
+    const sourceDays =
+      period === "7d"
+        ? (matched?.days?.length ? matched.days : fallbackThirtyDay?.days ?? []).slice(-7)
+        : matched?.days ?? [];
+    if (sourceDays.length === 0) return [];
 
-    for (const d of days) {
+    for (const d of sourceDays) {
       revenueMap[d.date] = (revenueMap[d.date] || 0) + d.revenueARS;
     }
 
@@ -72,7 +91,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
       const value = revenueMap[dateStr];
       return {
         date: dateStr,
-        label: dateObj.getDate().toString(),
+        label: formatAxisDate(dateObj),
         fullLabel: `${dd}/${mm}`,
         value,
         formatted: `$${value.toLocaleString("es-AR")}`,
@@ -144,15 +163,54 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
     return baseLeft;
   }, [selectedIndex, chartWidth, barInitialSpacing]);
 
-  const lineChartData = useMemo(() => {
-    return safeDailyData.map((item, index) => ({
-      value: item.value,
-      label: index % 5 === 0 ? item.label : "",
-      date: item.date,
-      fullLabel: item.fullLabel,
-      formatted: item.formatted,
-    }));
+  const lineTickIndexes = useMemo(() => {
+    const tickCount = Math.min(5, safeDailyData.length);
+
+    if (tickCount === 0) return [];
+
+    const ticks: number[] = [];
+    const usedIndexes = new Set<number>();
+
+    for (let i = 0; i < tickCount; i += 1) {
+      const index = Math.round(
+        (i * (safeDailyData.length - 1)) / Math.max(tickCount - 1, 1)
+      );
+
+      if (!usedIndexes.has(index)) {
+        usedIndexes.add(index);
+        ticks.push(index);
+      }
+    }
+
+    return ticks;
   }, [safeDailyData]);
+
+  const lineChartData = useMemo(
+    () =>
+      safeDailyData.map((item, index) => ({
+        value: item.value,
+        label: "",
+        labelComponent: lineTickIndexes.includes(index)
+          ? () => (
+              <View style={styles.lineTickLabelWrap}>
+                <Text
+                  style={[
+                    styles.lineTickLabel,
+                    { color: isDark ? "#94a3b8" : "#475569" },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
+              </View>
+            )
+          : undefined,
+        date: item.date,
+        fullLabel: item.fullLabel,
+        formatted: item.formatted,
+      })),
+    [isDark, lineTickIndexes, safeDailyData]
+  );
 
   const lineColor = isDark ? "#60a5fa" : "#0f5cff";
   const tooltipBg = isDark ? "#1e293b" : "#ffffff";
@@ -163,13 +221,14 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
       : null;
 
   return (
-    <View style={{ paddingTop: 22 }}>
+    <View style={{ paddingTop: 4 }}>
       {period === "7d" ? (
         <>
           <BarChart
             key={`${eventId}-${period}`}
             data={barChartData}
             width={chartWidth}
+            height={barChartHeight}
             barWidth={barWidth}
             spacing={barSpacing}
             roundedTop
@@ -184,7 +243,7 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
             showFractionalValues={false}
             xAxisLabelTextStyle={{
               color: isDark ? "#94a3b8" : "#475569",
-              fontSize: 12,
+              fontSize: 10,
             }}
           />
 
@@ -217,9 +276,10 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
           key={`${eventId}-${period}`}
           data={lineChartData}
           width={chartWidth}
-          height={200}
+          height={lineChartHeight}
           labelsExtraHeight={32}
-          xAxisLabelsHeight={28}
+          xAxisLabelsHeight={32}
+          xAxisTextNumberOfLines={1}
           isAnimated
           animationDuration={650}
           thickness={3}
@@ -236,7 +296,8 @@ export const RevenueBarChart = ({ period, eventId }: Props) => {
           curvature={0.2}
           adjustToWidth
           disableScroll
-          initialSpacing={0}
+          initialSpacing={28}
+          endSpacing={28}
           pointerConfig={{
             pointerStripUptoDataPoint: true,
             pointerStripColor: isDark ? "#334155" : "#e2e8f0",
@@ -325,5 +386,14 @@ const styles = StyleSheet.create({
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
     marginTop: -1,
+  },
+  lineTickLabelWrap: {
+    width: 64,
+    alignItems: "center",
+    marginLeft: -32,
+  },
+  lineTickLabel: {
+    fontSize: 9,
+    textAlign: "center",
   },
 });

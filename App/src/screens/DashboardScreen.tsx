@@ -4,17 +4,13 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import StatTile from "../components/StatTile";
 import Chip from "../components/UI/Chip";
 import Section from "../components/UI/Section";
-import SalesCalendar from "../components/SalesCalendar";
 import { useTranslation } from "../hooks/useTranslation";
 import {
   DailySalesRow,
@@ -25,16 +21,12 @@ import {
 } from "../data/mockEventAnalytics";
 import { RevenueBarChart } from "../components/RevenueBarChart";
 import { useAppState } from "../store/appState";
-import PageHeader from "../components/UI/PageHeader";
+import TopBar from "../components/UI/TopBar";
 import RootDrawer from "../components/RootDrawer";
+import { useAuth } from "../store/auth";
+import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
 
 // Helpers
-const formatARS = (amount: number) =>
-  new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-  }).format(amount);
 const formatPlainNumber = (amount: number) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(amount);
 const sumRevenue = (days: DailySalesRow[]) =>
@@ -51,13 +43,20 @@ const findBestDay = (days: DailySalesRow[]) =>
 
 const DashboardScreen = () => {
   const { language } = useTranslation();
-  const { width } = useWindowDimensions();
   const [periodNew, setPeriodNew] = useState<"7d" | "30d">("7d");
   const { theme } = useAppState();
+  const { user } = useAuth();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const isDark = theme === "dark";
   const tileClass = isDark
     ? "bg-white/5 border border-white/10"
     : "bg-card-light border border-border-light";
+  const secondaryTileClass = isDark
+    ? "bg-white/[0.03] border border-white/8"
+    : "bg-slate-50 border border-slate-200";
+  const sectionCardClass = isDark
+    ? "rounded-3xl border border-white/10 bg-white/5"
+    : "rounded-3xl border border-border-light bg-card-light";
 
   const [selectedEventId, setSelectedEventId] = useState<string>(
     () => mockEventGeneralStats[0]?.eventId ?? ""
@@ -129,6 +128,12 @@ const DashboardScreen = () => {
     [language]
   );
 
+  const handleAvatarPress = useCallback(() => {
+    const parentNav = navigation.getParent?.();
+    const target = parentNav ?? navigation;
+    target.navigate("Profile");
+  }, [navigation]);
+
   if (!eventStats || !periodSummary) {
     return (
       <RootDrawer>
@@ -138,21 +143,11 @@ const DashboardScreen = () => {
               isDark ? "bg-background-dark" : "bg-background-light"
             }`}
           >
-            <PageHeader
-              title="General"
-              leftAccessory={
-                <Pressable
-                  onPress={openDrawer}
-                  accessibilityRole="button"
-                  className="rounded-full bg-card-light p-2 dark:bg-card-dark"
-                >
-                  <Feather
-                    name="menu"
-                    size={20}
-                    color={isDark ? "#e2e8f0" : "#0f172a"}
-                  />
-                </Pressable>
-              }
+            <TopBar
+              title="Resumen General"
+              onLeftPress={openDrawer}
+              onRightPress={handleAvatarPress}
+              rightInitials={user?.initials}
             />
             <View className="flex-1 items-center justify-center px-6">
               <Text
@@ -184,99 +179,103 @@ const DashboardScreen = () => {
             isDark ? "bg-background-dark" : "bg-background-light"
           }`}
         >
-          <PageHeader
-            title="General"
-            leftAccessory={
-              <Pressable
-                onPress={openDrawer}
-                accessibilityRole="button"
-                className={`rounded-full p-2 ${
-                  isDark ? "bg-card-dark" : "bg-card-light"
-                }`}
-              >
-                <Feather
-                  name="menu"
-                  size={20}
-                  color={isDark ? "#e2e8f0" : "#0f172a"}
-                />
-              </Pressable>
-            }
+          <TopBar
+            title="Resumen general"
+            onLeftPress={openDrawer}
+            onRightPress={handleAvatarPress}
+            rightInitials={user?.initials}
           />
           <ScrollView
             className="flex-1 px-5 pt-4"
             contentInsetAdjustmentBehavior="automatic"
+            contentContainerStyle={{ paddingBottom: 12 }}
           >
             {/* Resumen general */}
-            <View className="mb-6">
-              <Text
-                className={`text-lg font-semibold ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                Resumen general
-              </Text>
-              <View className="mt-3 flex-row flex-wrap gap-4">
+            <View className="mb-8">
+              <View className="mt-4 flex-row flex-wrap gap-4">
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
-                  label="Total recaudado (ARS)"
-                  value={formatARS(totalRevenueAll)}
+                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
+                  label="Total recaudado"
+                  value={`$ ${formatPlainNumber(totalRevenueAll)}`}
                   accent="#0f5cff"
                 />
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
                   label="Tickets vendidos"
                   value={formatPlainNumber(totalTicketsAll)}
                 />
               </View>
             </View>
 
-            {/* Selector de función */}
-            <View className="mb-6">
+            {/* Contexto activo */}
+            <View className={`mb-8 p-4 ${sectionCardClass}`}>
               <Text
-                className={`mb-2 text-sm font-semibold ${
-                  isDark ? "text-text-dark" : "text-text-light"
+                className={`text-xs font-semibold uppercase tracking-[0.18em] ${
+                  isDark ? "text-subtext-dark" : "text-subtext-light"
                 }`}
               >
-                Seleccionar funcion
+                Contexto activo
               </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {mockEventGeneralStats.map((item) => (
-                  <Chip
-                    key={item.eventId}
-                    label={`${formatDate(item.sessionDateTime, {
-                      month: "short",
-                      day: "numeric",
-                    })}`}
-                    selected={selectedEventId === item.eventId}
-                    onPress={() => setSelectedEventId(item.eventId)}
-                    accessibilityLabel={`Ver KPIs de ${
-                      item.eventName
-                    } ${formatDate(item.sessionDateTime, {
-                      day: "2-digit",
-                      month: "2-digit",
-                    })}`}
-                  />
-                ))}
-              </View>
-              <View className="mt-4">
+              <View className="mt-3">
                 <Text
-                  className={`text-2xl font-semibold ${
+                  className={`mb-2 text-sm font-semibold ${
+                    isDark ? "text-text-dark" : "text-text-light"
+                  }`}
+                >
+                  Seleccionar función
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {mockEventGeneralStats.map((item) => (
+                    <Chip
+                      key={item.eventId}
+                      label={`${formatDate(item.sessionDateTime, {
+                        month: "short",
+                        day: "numeric",
+                      })}`}
+                      selected={selectedEventId === item.eventId}
+                      onPress={() => setSelectedEventId(item.eventId)}
+                      accessibilityLabel={`Ver KPIs de ${
+                        item.eventName
+                      } ${formatDate(item.sessionDateTime, {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}`}
+                    />
+                  ))}
+                </View>
+              </View>
+              <View
+                className={`mt-4 border-t pt-4 ${
+                  isDark ? "border-white/10" : "border-border-light"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold uppercase tracking-[0.18em] ${
+                    isDark ? "text-subtext-dark" : "text-subtext-light"
+                  }`}
+                >
+                  Evento
+                </Text>
+                <Text
+                  className={`mt-1.5 text-lg font-semibold leading-6 ${
                     isDark ? "text-text-dark" : "text-text-light"
                   }`}
                 >
                   {eventStats.eventName}
                 </Text>
                 <Text
-                  className={`text-sm ${
+                  className={`mt-1.5 text-sm leading-5 ${
                     isDark ? "text-subtext-dark" : "text-subtext-light"
                   }`}
                 >
-                  {eventStats.venueName}{" "}
+                  {eventStats.venueName} |{" "}
                   {formatDate(eventStats.sessionDateTime, {
                     day: "2-digit",
                     month: "2-digit",
                     year: "numeric",
                   })}{" "}
+                  |
+                  {" "}
                   {formatDate(eventStats.sessionDateTime, {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -286,7 +285,7 @@ const DashboardScreen = () => {
             </View>
 
             {/* KPI Tiles */}
-            <View className="mb-4">
+            <View className="mb-8">
               <Text
                 className={`text-lg font-semibold ${
                   isDark ? "text-text-dark" : "text-text-light"
@@ -294,25 +293,34 @@ const DashboardScreen = () => {
               >
                 Resumen del evento
               </Text>
-              <View className="flex-row flex-wrap gap-4">
+              {/* <Text
+                className={`mt-1 text-sm ${
+                  isDark ? "text-subtext-dark" : "text-subtext-light"
+                }`}
+              >
+                KPIs de la función actualmente seleccionada.
+              </Text> */}
+              <View className="mt-4 flex-row gap-4">
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
                   label="Tickets vendidos"
                   value={eventStats.ticketsSold.toString()}
                 />
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
-                  label="Total recaudado (ARS)"
-                  value={formatARS(eventStats.totalRevenueARS)}
+                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
+                  label="Total recaudado"
+                  value={`$ ${formatPlainNumber(eventStats.totalRevenueARS)}`}
                   accent="#0f5cff"
                 />
+              </View>
+              <View className="mt-4 flex-row gap-4">
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  className={`flex-1 min-w-[45%] p-4 ${secondaryTileClass}`}
                   label="Invitaciones"
                   value={eventStats.invitations.toString()}
                 />
                 <StatTile
-                  className={`flex-1 min-w-[45%] ${tileClass}`}
+                  className={`flex-1 min-w-[45%] p-4 ${secondaryTileClass}`}
                   label="Contactos"
                   value={eventStats.contactsCount.toString()}
                 />
@@ -321,18 +329,17 @@ const DashboardScreen = () => {
 
             {/* Toggle y Bar Chart */}
             <View
-              className={`mb-4 ${
-                periodNew === "7d" ? "items-center" : "w-full"
-              }`}
+              className={`w-full px-4 pt-4 pb-2 ${sectionCardClass}`}
             >
               <Text
-                className={`text-lg mb-4 text-left w-full font-semibold ${
+                className={`w-full text-lg font-semibold ${
                   isDark ? "text-text-dark" : "text-text-light"
                 }`}
               >
-                Ingresos diarios (ARS)
+                Ingresos diarios
               </Text>
               <View
+                className="mt-2"
                 style={[
                   styles.toggleContainer,
                   {
@@ -378,19 +385,9 @@ const DashboardScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              <RevenueBarChart period={periodNew} eventId={selectedEventId} />
-            </View>
-
-            {/* Calendario */}
-            <View className="mb-4">
-              <Text
-                className={`text-lg font-semibold my-4 ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                Calendario de ventas
-              </Text>
-              <SalesCalendar summary={periodSummary} />
+              <View className="mt-0.5 w-full">
+                <RevenueBarChart period={periodNew} eventId={selectedEventId} />
+              </View>
             </View>
           </ScrollView>
         </SafeAreaView>

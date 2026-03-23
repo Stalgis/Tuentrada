@@ -9,9 +9,21 @@ type PageHeaderProps = {
   title: string;
   subtitle?: string;
   leftAccessory?: React.ReactNode;
+  compact?: boolean;
+  avatarSize?: "sm" | "md" | "lg";
+  avatarClassName?: string;
+  avatarTextClassName?: string;
 };
 
-const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
+const PageHeader = ({
+  title,
+  subtitle,
+  leftAccessory,
+  compact = false,
+  avatarSize = "md",
+  avatarClassName,
+  avatarTextClassName,
+}: PageHeaderProps) => {
   const { theme } = useAppState();
   const isDark = theme === "dark";
   const { user } = useAuth();
@@ -25,7 +37,9 @@ const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
 
   return (
     <View
-      className={`px-5 pt-4 pb-3 border-b flex flex-row items-center ${
+      className={`px-5 border-b flex flex-row items-center ${
+        compact ? "pt-3 pb-2" : "pt-4 pb-3"
+      } ${
         isDark
           ? "bg-background-dark border-border-dark"
           : "bg-background-light border-border-light"
@@ -34,7 +48,9 @@ const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
       {leftAccessory ? <View className="mr-3">{leftAccessory}</View> : null}
       <View className="flex-1">
         <Text
-          className={`text-3xl font-bold ${
+          className={`font-bold tracking-tight ${
+            compact ? "text-[1.75rem]" : "text-3xl"
+          } ${
             isDark ? "text-text-dark" : "text-text-light"
           }`}
         >
@@ -50,7 +66,14 @@ const PageHeader = ({ title, subtitle, leftAccessory }: PageHeaderProps) => {
           </Text>
         ) : null}
       </View>
-      <Avatar initials={user?.initials ?? "TU"} size="md" onPress={handleAvatarPress} />
+      <Avatar
+        initials={user?.initials ?? "TU"}
+        size={avatarSize}
+        className={avatarClassName}
+        textClassName={avatarTextClassName}
+        onPress={handleAvatarPress}
+        hitSlop={8}
+      />
     </View>
   );
 };

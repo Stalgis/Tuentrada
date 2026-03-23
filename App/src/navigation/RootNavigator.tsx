@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import DashboardScreen from "../screens/DashboardScreen";
@@ -10,6 +11,8 @@ import EventsListScreen from "../screens/EventsListScreen";
 import EventDetailScreen from "../screens/EventDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
+import SectorScreen from "@/screens/SectorScreen";
+import PaymentScreen from "@/screens/PaymentScreen";
 import { getNavigationTheme } from "../lib/theme";
 import {
   EventsStackParamList,
@@ -17,10 +20,8 @@ import {
   AuthStackParamList,
   AppStackParamList,
 } from "./types";
-import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
-import VentasScreen from "@/screens/VentasScreen";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -31,7 +32,6 @@ const EventsNavigator = () => (
   <EventsStack.Navigator screenOptions={{ headerShown: false }}>
     <EventsStack.Screen name="EventsList" component={EventsListScreen} />
     <EventsStack.Screen name="EventDetail" component={EventDetailScreen} />
-    <EventsStack.Screen name="Ventas" component={VentasScreen} />
   </EventsStack.Navigator>
 );
 
@@ -42,19 +42,18 @@ const AuthNavigator = () => (
 );
 
 const RootNavigator = () => {
-  const { t } = useTranslation();
   const { status } = useAuth();
   const { theme } = useAppState();
+  const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
 
   const tabBarStyle = {
     backgroundColor: isDark ? "#020617" : "#ffffff",
     borderTopColor: isDark ? "#1e293b" : "#e2e8f0",
     borderTopWidth: 1,
-    height: 74,
-    paddingTop: 10,
-    paddingBottom: 14,
-    marginBottom: 10,
+    height: 58 + insets.bottom,
+    paddingTop: 4,
+    paddingBottom: Math.max(insets.bottom, 8),
     shadowColor: "#0f172a",
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: -4 },
@@ -68,15 +67,16 @@ const RootNavigator = () => {
         tabBarActiveTintColor: isDark ? "#60a5fa" : "#0f5cff",
         tabBarInactiveTintColor: isDark ? "#94a3b8" : "#94a3b8",
         tabBarStyle,
-        tabBarItemStyle: { paddingBottom: 2 },
-        tabBarLabelStyle: { fontSize: 12, marginBottom: 6 },
+        tabBarItemStyle: { paddingBottom: 0, paddingTop: 0 },
+        tabBarLabelStyle: { fontSize: 12, marginBottom: 2 },
+        tabBarIconStyle: { marginTop: 0 },
       }}
     >
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}
         options={{
-          tabBarLabel: t("overviewTitle"),
+          tabBarLabel: "Resumen",
           tabBarIcon: ({ color, size }) => (
             <Feather name="pie-chart" color={color} size={size} />
           ),
@@ -86,7 +86,7 @@ const RootNavigator = () => {
         name="Events"
         component={EventsNavigator}
         options={{
-          tabBarLabel: t("eventsTitle"),
+          tabBarLabel: "Eventos",
           tabBarIcon: ({ color, size }) => (
             <Feather name="calendar" color={color} size={size} />
           ),
@@ -94,11 +94,21 @@ const RootNavigator = () => {
       />
       <Tab.Screen
         name="Ventas"
-        component={VentasScreen}
+        component={SectorScreen}
         options={{
-          tabBarLabel: t("ventasTitle"),
+          tabBarLabel: "Ventas",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ticket-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Pago"
+        component={PaymentScreen}
+        options={{
+          tabBarLabel: "Pago",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="card-outline" size={size} color={color} />
           ),
         }}
       />

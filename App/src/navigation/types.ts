@@ -1,13 +1,13 @@
 export type EventsStackParamList = {
   EventsList: undefined;
   EventDetail: { eventId: string };
-  Ventas: undefined;
 };
 
 export type RootTabParamList = {
   Dashboard: undefined;
   Events: undefined;
   Ventas: undefined;
+  Pago: undefined;
 };
 
 export type AuthStackParamList = {
