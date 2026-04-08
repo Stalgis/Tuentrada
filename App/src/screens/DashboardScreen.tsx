@@ -1,423 +1,310 @@
-// src/screens/DashboardScreen.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ScrollView,
-  Text,
-  View,
-  StyleSheet,
-  TouchableOpacity,
-} from "react-native";
+import React, { useEffect, useMemo } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import StatTile from "../components/StatTile";
-import Chip from "../components/UI/Chip";
-import Section from "../components/UI/Section";
-import { useTranslation } from "../hooks/useTranslation";
+import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import AppHeader from "../components/stitch/AppHeader";
+import SurfaceCard from "../components/stitch/SurfaceCard";
+import { dailySales } from "../data/salesStats";
 import {
-  DailySalesRow,
-  DailySalesSummary,
-  EventGeneralStats,
-  mockDailySalesSummaries,
-  mockEventGeneralStats,
-} from "../data/mockEventAnalytics";
-import { RevenueBarChart } from "../components/RevenueBarChart";
+  formatCurrencyARS,
+  formatDateShort,
+  formatInteger,
+  formatPercent,
+} from "../lib/formatters";
 import { useAppState } from "../store/appState";
-import TopBar from "../components/UI/TopBar";
-import RootDrawer from "../components/RootDrawer";
 import { useAuth } from "../store/auth";
-import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
+import { getPalette } from "../lib/theme";
+import type { Event } from "../lib/types";
 
-// Helpers
-const formatPlainNumber = (amount: number) =>
-  new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(amount);
-const sumRevenue = (days: DailySalesRow[]) =>
-  days.reduce((sum, day) => sum + day.revenueARS, 0);
-const sumTickets = (days: DailySalesRow[]) =>
-  days.reduce((sum, day) => sum + day.ticketsSold, 0);
-const calcAverageTicket = (totalRevenue: number, totalTickets: number) =>
-  totalTickets > 0 ? totalRevenue / totalTickets : 0;
-const findBestDay = (days: DailySalesRow[]) =>
-  days.reduce(
-    (best, current) => (current.revenueARS > best.revenueARS ? current : best),
-    days[0]
-  );
-
-const DashboardScreen = () => {
-  const { language } = useTranslation();
-  const [periodNew, setPeriodNew] = useState<"7d" | "30d">("7d");
-  const { theme } = useAppState();
-  const { user } = useAuth();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const isDark = theme === "dark";
-  const tileClass = isDark
-    ? "bg-white/5 border border-white/10"
-    : "bg-card-light border border-border-light";
-  const secondaryTileClass = isDark
-    ? "bg-white/[0.03] border border-white/8"
-    : "bg-slate-50 border border-slate-200";
-  const sectionCardClass = isDark
-    ? "rounded-3xl border border-white/10 bg-white/5"
-    : "rounded-3xl border border-border-light bg-card-light";
-
-  const [selectedEventId, setSelectedEventId] = useState<string>(
-    () => mockEventGeneralStats[0]?.eventId ?? ""
-  );
-  const [period, setPeriod] = useState<"last7Days" | "last30Days">("last7Days");
-
-  const eventStats = useMemo<EventGeneralStats | undefined>(
-    () =>
-      mockEventGeneralStats.find((event) => event.eventId === selectedEventId),
-    [selectedEventId]
-  );
-  const totalRevenueAll = useMemo(
-    () =>
-      mockEventGeneralStats.reduce(
-        (sum, item) => sum + item.totalRevenueARS,
-        0
-      ),
-    []
-  );
-  const totalTicketsAll = useMemo(
-    () =>
-      mockEventGeneralStats.reduce((sum, item) => sum + item.ticketsSold, 0),
-    []
-  );
-
-  const periodSummary: DailySalesSummary | undefined = useMemo(
-    () =>
-      mockDailySalesSummaries.find(
-        (summary) =>
-          summary.eventId === selectedEventId && summary.period === period
-      ),
-    [selectedEventId, period]
-  );
-
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-
-  const daysLength = periodSummary?.days?.length ?? 0;
-  useEffect(() => {
-    if (daysLength > 0) {
-      setSelectedDayIndex(Math.max(daysLength - 1, 0));
-    }
-  }, [periodSummary?.eventId, periodSummary?.period, daysLength]);
-
-  const totalRevenuePeriod = useMemo(
-    () => sumRevenue(periodSummary?.days ?? []),
-    [periodSummary]
-  );
-  const totalTicketsPeriod = useMemo(
-    () => sumTickets(periodSummary?.days ?? []),
-    [periodSummary]
-  );
-  const averageTicket = useMemo(
-    () => calcAverageTicket(totalRevenuePeriod, totalTicketsPeriod),
-    [totalRevenuePeriod, totalTicketsPeriod]
-  );
-  const bestDay = useMemo(
-    () =>
-      periodSummary?.days?.length
-        ? findBestDay(periodSummary.days)
-        : undefined,
-    [periodSummary]
-  );
-
-  const formatDate = useCallback(
-    (dateISO: string, options: Intl.DateTimeFormatOptions) => {
-      const locale = language === "es" ? "es-AR" : "en-US";
-      return new Intl.DateTimeFormat(locale, options).format(new Date(dateISO));
-    },
-    [language]
-  );
-
-  const handleAvatarPress = useCallback(() => {
-    const parentNav = navigation.getParent?.();
-    const target = parentNav ?? navigation;
-    target.navigate("Profile");
-  }, [navigation]);
-
-  if (!eventStats || !periodSummary) {
-    return (
-      <RootDrawer>
-        {(openDrawer) => (
-          <SafeAreaView
-            className={`flex-1 ${
-              isDark ? "bg-background-dark" : "bg-background-light"
-            }`}
-          >
-            <TopBar
-              title="Resumen General"
-              onLeftPress={openDrawer}
-              onRightPress={handleAvatarPress}
-              rightInitials={user?.initials}
-            />
-            <View className="flex-1 items-center justify-center px-6">
-              <Text
-                className={`text-lg font-semibold ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                No hay datos para mostrar
-              </Text>
-              <Text
-                className={`mt-2 text-center ${
-                  isDark ? "text-subtext-dark" : "text-subtext-light"
-                }`}
-              >
-                Agrega funciones en mockEventAnalytics.ts para ver el dashboard.
-              </Text>
-            </View>
-          </SafeAreaView>
-        )}
-      </RootDrawer>
-    );
-  }
-
-  return (
-    <RootDrawer>
-      {(openDrawer) => (
-        <SafeAreaView
-          className={`flex-1 ${
-            isDark ? "bg-background-dark" : "bg-background-light"
-          }`}
-        >
-          <TopBar
-            title="Resumen general"
-            onLeftPress={openDrawer}
-            onRightPress={handleAvatarPress}
-            rightInitials={user?.initials}
-          />
-          <ScrollView
-            className="flex-1 px-5 pt-4"
-            contentInsetAdjustmentBehavior="automatic"
-            contentContainerStyle={{ paddingBottom: 12 }}
-          >
-            {/* Resumen general */}
-            <View className="mb-8">
-              <View className="mt-4 flex-row flex-wrap gap-4">
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
-                  label="Total recaudado"
-                  value={`$ ${formatPlainNumber(totalRevenueAll)}`}
-                  accent="#0f5cff"
-                />
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
-                  label="Tickets vendidos"
-                  value={formatPlainNumber(totalTicketsAll)}
-                />
-              </View>
-            </View>
-
-            {/* Contexto activo */}
-            <View className={`mb-8 p-4 ${sectionCardClass}`}>
-              <Text
-                className={`text-xs font-semibold uppercase tracking-[0.18em] ${
-                  isDark ? "text-subtext-dark" : "text-subtext-light"
-                }`}
-              >
-                Contexto activo
-              </Text>
-              <View className="mt-3">
-                <Text
-                  className={`mb-2 text-sm font-semibold ${
-                    isDark ? "text-text-dark" : "text-text-light"
-                  }`}
-                >
-                  Seleccionar función
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {mockEventGeneralStats.map((item) => (
-                    <Chip
-                      key={item.eventId}
-                      label={`${formatDate(item.sessionDateTime, {
-                        month: "short",
-                        day: "numeric",
-                      })}`}
-                      selected={selectedEventId === item.eventId}
-                      onPress={() => setSelectedEventId(item.eventId)}
-                      accessibilityLabel={`Ver KPIs de ${
-                        item.eventName
-                      } ${formatDate(item.sessionDateTime, {
-                        day: "2-digit",
-                        month: "2-digit",
-                      })}`}
-                    />
-                  ))}
-                </View>
-              </View>
-              <View
-                className={`mt-4 border-t pt-4 ${
-                  isDark ? "border-white/10" : "border-border-light"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-semibold uppercase tracking-[0.18em] ${
-                    isDark ? "text-subtext-dark" : "text-subtext-light"
-                  }`}
-                >
-                  Evento
-                </Text>
-                <Text
-                  className={`mt-1.5 text-lg font-semibold leading-6 ${
-                    isDark ? "text-text-dark" : "text-text-light"
-                  }`}
-                >
-                  {eventStats.eventName}
-                </Text>
-                <Text
-                  className={`mt-1.5 text-sm leading-5 ${
-                    isDark ? "text-subtext-dark" : "text-subtext-light"
-                  }`}
-                >
-                  {eventStats.venueName} |{" "}
-                  {formatDate(eventStats.sessionDateTime, {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })}{" "}
-                  |
-                  {" "}
-                  {formatDate(eventStats.sessionDateTime, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </Text>
-              </View>
-            </View>
-
-            {/* KPI Tiles */}
-            <View className="mb-8">
-              <Text
-                className={`text-lg font-semibold ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                Resumen del evento
-              </Text>
-              {/* <Text
-                className={`mt-1 text-sm ${
-                  isDark ? "text-subtext-dark" : "text-subtext-light"
-                }`}
-              >
-                KPIs de la función actualmente seleccionada.
-              </Text> */}
-              <View className="mt-4 flex-row gap-4">
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
-                  label="Tickets vendidos"
-                  value={eventStats.ticketsSold.toString()}
-                />
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-5 ${tileClass}`}
-                  label="Total recaudado"
-                  value={`$ ${formatPlainNumber(eventStats.totalRevenueARS)}`}
-                  accent="#0f5cff"
-                />
-              </View>
-              <View className="mt-4 flex-row gap-4">
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-4 ${secondaryTileClass}`}
-                  label="Invitaciones"
-                  value={eventStats.invitations.toString()}
-                />
-                <StatTile
-                  className={`flex-1 min-w-[45%] p-4 ${secondaryTileClass}`}
-                  label="Contactos"
-                  value={eventStats.contactsCount.toString()}
-                />
-              </View>
-            </View>
-
-            {/* Toggle y Bar Chart */}
-            <View
-              className={`w-full px-4 pt-4 pb-2 ${sectionCardClass}`}
-            >
-              <Text
-                className={`w-full text-lg font-semibold ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
-              >
-                Ingresos diarios
-              </Text>
-              <View
-                className="mt-2"
-                style={[
-                  styles.toggleContainer,
-                  {
-                    backgroundColor: isDark ? "#1e293b" : "#e5e7eb",
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    periodNew === "7d" && styles.toggleActive,
-                  ]}
-                  onPress={() => setPeriodNew("7d")}
-                >
-                  <Text
-                    style={[
-                      styles.toggleText,
-                      periodNew === "7d"
-                        ? styles.toggleTextActive
-                        : { color: isDark ? "#94a3b8" : "#333" },
-                    ]}
-                  >
-                    Últimos 7 días
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    periodNew === "30d" && styles.toggleActive,
-                  ]}
-                  onPress={() => setPeriodNew("30d")}
-                >
-                  <Text
-                    style={[
-                      styles.toggleText,
-                      periodNew === "30d"
-                        ? styles.toggleTextActive
-                        : { color: isDark ? "#94a3b8" : "#333" },
-                    ]}
-                  >
-                    Últimos 30 días
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View className="mt-0.5 w-full">
-                <RevenueBarChart period={periodNew} eventId={selectedEventId} />
-              </View>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      )}
-    </RootDrawer>
-  );
+const statusLabel: Record<Event["status"], string> = {
+  on_sale: "En venta",
+  sold_out: "Agotado",
+  finished: "Finalizado",
 };
 
-const styles = StyleSheet.create({
-  toggleContainer: {
-    flexDirection: "row",
-    borderRadius: 24,
-    padding: 4,
-    marginBottom: 16,
-    alignSelf: "center",
-  },
-  toggleButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  toggleActive: {
-    backgroundColor: "#0f5cff",
-  },
-  toggleText: {
-    fontWeight: "500",
-  },
-  toggleTextActive: {
-    color: "white",
-  },
-});
+const DashboardScreen = () => {
+  const navigation = useNavigation();
+  const { theme, events, loadEvents } = useAppState();
+  const { user } = useAuth();
+  const palette = getPalette(theme);
+
+  useEffect(() => {
+    if (events.status === "idle") {
+      loadEvents();
+    }
+  }, [events.status, loadEvents]);
+
+  const upcomingEvents = useMemo(
+    () =>
+      [...events.data]
+        .filter((event) => new Date(event.dateISO).getTime() >= Date.now())
+        .sort((left, right) => new Date(left.dateISO).getTime() - new Date(right.dateISO).getTime()),
+    [events.data]
+  );
+
+  const primaryEvent = upcomingEvents[0];
+  const requiresAttention = useMemo(
+    () =>
+      [...upcomingEvents]
+        .filter((event) => (event.velocity ?? 0) < 70 || (event.checkInProgress ?? 100) < 50)
+        .sort((left, right) => (left.velocity ?? 0) - (right.velocity ?? 0))
+        .slice(0, 3),
+    [upcomingEvents]
+  );
+  const recentDailySales = useMemo(() => dailySales.slice(-7), []);
+  const todayRevenue = recentDailySales.at(-1)?.revenueARS ?? 0;
+  const yesterdayRevenue = recentDailySales.at(-2)?.revenueARS ?? 0;
+  const weeklyRevenue = useMemo(
+    () => recentDailySales.reduce((total, day) => total + day.revenueARS, 0),
+    [recentDailySales]
+  );
+  const previousDailySales = useMemo(() => dailySales.slice(-14, -7), []);
+  const previousWeekRevenue = useMemo(
+    () => previousDailySales.reduce((total, day) => total + day.revenueARS, 0),
+    [previousDailySales]
+  );
+  const averageDailyRevenue = recentDailySales.length > 0 ? weeklyRevenue / recentDailySales.length : 0;
+  const bestRevenueDay = useMemo(
+    () =>
+      recentDailySales.reduce(
+        (best, day) => (day.revenueARS > best.revenueARS ? day : best),
+        recentDailySales[0] ?? { dateISO: "", ticketsSold: 0, revenueARS: 0 }
+      ),
+    [recentDailySales]
+  );
+  const revenueDeltaPercent =
+    yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
+  const projectedMonthlyRevenue = averageDailyRevenue * 30;
+  const weeklyGrowthPercent =
+    previousWeekRevenue > 0 ? ((weeklyRevenue - previousWeekRevenue) / previousWeekRevenue) * 100 : 0;
+  const primaryEventRevenue = primaryEvent ? primaryEvent.ticketsSold * primaryEvent.ticketPriceARS : 0;
+
+  return (
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+        <AppHeader
+          title="Ingresos"
+          pillLabel={`${upcomingEvents.length || 0} eventos activos`}
+          onAvatarPress={() => navigation.navigate("Profile" as never)}
+          avatarInitials={user?.initials}
+        />
+
+        <View style={{ paddingHorizontal: 20, gap: 14 }}>
+          <SurfaceCard tone="hero">
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
+                  Ingresos del dia
+                </Text>
+                <Text style={{ color: palette.text, fontSize: 32, fontWeight: "800", marginTop: 8, letterSpacing: -1 }}>
+                  {formatCurrencyARS(todayRevenue)}
+                </Text>
+                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
+                  {yesterdayRevenue > 0
+                    ? `${revenueDeltaPercent >= 0 ? "+" : ""}${formatPercent(revenueDeltaPercent)} vs ayer`
+                    : "Todavia no hay comparativa diaria disponible"}
+                </Text>
+              </View>
+              <Pressable onPress={() => navigation.navigate("Analytics" as never)}>
+                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Ver ventas</Text>
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
+              <View style={{ flex: 1, backgroundColor: palette.surfaceMuted, borderRadius: 18, padding: 12 }}>
+                <Text style={{ color: palette.subtext, fontSize: 10, fontWeight: "700" }}>Ultimos 7 dias</Text>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={{ color: palette.text, fontSize: 18, fontWeight: "800", marginTop: 6 }}
+                >
+                  {formatCurrencyARS(weeklyRevenue)}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: palette.surfaceMuted, borderRadius: 18, padding: 12 }}>
+                <Text style={{ color: palette.subtext, fontSize: 10, fontWeight: "700" }}>Promedio</Text>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={{ color: palette.text, fontSize: 18, fontWeight: "800", marginTop: 6 }}
+                >
+                  {formatCurrencyARS(averageDailyRevenue)}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: palette.surfaceMuted, borderRadius: 18, padding: 12 }}>
+                <Text style={{ color: palette.subtext, fontSize: 10, fontWeight: "700" }}>Mejor dia</Text>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={{ color: palette.text, fontSize: 18, fontWeight: "800", marginTop: 6 }}
+                >
+                  {formatCurrencyARS(bestRevenueDay.revenueARS)}
+                </Text>
+                <Text style={{ color: palette.subtext, fontSize: 10, marginTop: 4 }}>
+                  {bestRevenueDay.dateISO ? formatDateShort(bestRevenueDay.dateISO) : "Sin datos"}
+                </Text>
+              </View>
+            </View>
+            <View
+              style={{
+                marginTop: 16,
+                backgroundColor: palette.surfaceMuted,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 13,
+                borderWidth: 1,
+                borderColor: palette.hairline,
+              }}
+            >
+              <Text style={{ color: palette.subtext, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+                Proyeccion a 30 dias
+              </Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  style={{ color: palette.text, fontSize: 24, fontWeight: "800", flex: 1, marginRight: 12 }}
+                >
+                  {formatCurrencyARS(projectedMonthlyRevenue)}
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: weeklyGrowthPercent >= 0 ? `${palette.success}22` : `${palette.danger}22`,
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: weeklyGrowthPercent >= 0 ? palette.success : palette.danger,
+                      fontSize: 11,
+                      fontWeight: "800",
+                    }}
+                  >
+                    {weeklyGrowthPercent >= 0 ? "+" : ""}
+                    {formatPercent(weeklyGrowthPercent)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 6 }}>
+                Manteniendo el promedio diario actual. Comparado contra la semana anterior.
+              </Text>
+            </View>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <View>
+                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Próximo evento</Text>
+                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                  El siguiente evento en calendario
+                </Text>
+              </View>
+              <Pressable onPress={() => navigation.navigate("Events" as never)}>
+                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Abrir catalogo</Text>
+              </Pressable>
+            </View>
+            {primaryEvent ? (
+              <View
+                style={{
+                  marginTop: 16,
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: 22,
+                  padding: 16,
+                }}
+              >
+                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{primaryEvent.name}</Text>
+                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
+                  {formatDateShort(primaryEvent.dateISO)} • {primaryEvent.venue} • {statusLabel[primaryEvent.status]}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 18, marginTop: 14 }}>
+                  <View>
+                    <Text style={{ color: palette.subtext, fontSize: 11 }}>Ingresos</Text>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
+                      {formatCurrencyARS(primaryEventRevenue)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: palette.subtext, fontSize: 11 }}>Vendidas</Text>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
+                      {formatInteger(primaryEvent.ticketsSold)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: palette.subtext, fontSize: 11 }}>Ocupacion</Text>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
+                      {formatPercent((primaryEvent.ticketsSold / Math.max(primaryEvent.ticketsAvailable, 1)) * 100)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <View>
+                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Requiere atencion</Text>
+                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                  Eventos con menor traccion o check-in
+                </Text>
+              </View>
+              <Pressable onPress={() => navigation.navigate("ExecutiveDashboard" as never)}>
+                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Vista ejecutiva</Text>
+              </Pressable>
+            </View>
+            <View style={{ gap: 12, marginTop: 16 }}>
+              {requiresAttention.map((event) => (
+                <View
+                  key={event.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 18,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: palette.warning,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather name="alert-circle" size={16} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>{event.name}</Text>
+                    <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
+                      {event.venue} • velocidad {formatPercent(event.velocity ?? 0)}
+                    </Text>
+                  </View>
+                  <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
+                    {formatPercent(event.checkInProgress ?? 0)}
+                  </Text>
+                </View>
+              ))}
+              {requiresAttention.length === 0 ? (
+                <Text style={{ color: palette.subtext, fontSize: 13 }}>
+                  No hay alertas operativas para los eventos activos.
+                </Text>
+              ) : null}
+            </View>
+          </SurfaceCard>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
 export default DashboardScreen;

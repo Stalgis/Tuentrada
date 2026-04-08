@@ -1,200 +1,178 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Text,
-  TextInput,
-  View,
-  Platform,
-} from "react-native";
-import { Feather } from "@expo/vector-icons";
-import {
-  useNavigation,
-  type NavigationProp,
-  type ParamListBase,
-} from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import React, { useEffect, useMemo, useState } from "react";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Event } from "../data/mockEvents";
-import EventCard from "../components/EventCard";
-import EmptyState from "../components/EmptyState";
-import Button from "../components/UI/Button";
-import { useAppState } from "../store/appState";
-import { useTranslation } from "../hooks/useTranslation";
+import { Feather } from "@expo/vector-icons";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
+import AppHeader from "../components/stitch/AppHeader";
+import SurfaceCard from "../components/stitch/SurfaceCard";
 import { EventsStackParamList } from "../navigation/types";
-import TopBar from "../components/UI/TopBar";
-import RootDrawer from "../components/RootDrawer";
+import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
-import FilterChip from "../components/UI/FilterChip";
+import { getPalette } from "../lib/theme";
+import { formatDateLong, formatInteger, formatPercent } from "../lib/formatters";
 
-const statusFilters = ["all", "on_sale", "sold_out", "finished"] as const;
+const filterLabels = [
+  { key: "all", label: "Todos" },
+  { key: "on_sale", label: "En venta" },
+  { key: "sold_out", label: "Agotados" },
+  { key: "finished", label: "Finalizados" },
+] as const;
+
+const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => {
+  if (status === "sold_out") return palette.warning;
+  if (status === "finished") return palette.subtext;
+  return palette.primary;
+};
 
 const EventsListScreen = () => {
-  const { theme } = useAppState();
-  const isDark = theme === "dark";
+  const navigation = useNavigation<NativeStackNavigationProp<EventsStackParamList>>();
+  const rootNavigation = useNavigation();
+  const { theme, events, loadEvents } = useAppState();
   const { user } = useAuth();
-  const navigation =
-    useNavigation<
-      NativeStackNavigationProp<EventsStackParamList, "EventsList">
-    >();
-  const rootNavigation = useNavigation<NavigationProp<ParamListBase>>();
-  const {
-    events: { data, status, error },
-    loadEvents,
-    currency,
-  } = useAppState();
-  const { t, language } = useTranslation();
+  const palette = getPalette(theme);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<(typeof statusFilters)[number]>("all");
+  const [filter, setFilter] = useState<(typeof filterLabels)[number]["key"]>("all");
 
   useEffect(() => {
-    if (status === "idle") {
+    if (events.status === "idle") {
       loadEvents();
     }
-  }, [status, loadEvents]);
+  }, [events.status, loadEvents]);
 
-  const filteredEvents = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return data.filter((event) => {
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return events.data.filter((event) => {
+      const matchesFilter = filter === "all" || event.status === filter;
       const matchesQuery =
-        normalizedQuery.length === 0 ||
-        [event.name, event.venue, event.city].some((field) =>
-          field.toLowerCase().includes(normalizedQuery)
-        );
-      const matchesStatus =
-        statusFilter === "all" || event.status === statusFilter;
-      return matchesQuery && matchesStatus;
+        normalized.length === 0 ||
+        [event.name, event.venue, event.city].some((entry) => entry.toLowerCase().includes(normalized));
+      return matchesFilter && matchesQuery;
     });
-  }, [data, query, statusFilter]);
+  }, [events.data, filter, query]);
 
-  const handlePress = useCallback(
-    (event: Event) => {
-      navigation.navigate("EventDetail", { eventId: event.id });
-    },
-    [navigation]
+  const eventsOnSale = useMemo(
+    () => events.data.filter((event) => event.status === "on_sale").length,
+    [events.data]
   );
-
-  const renderItem = useCallback(
-    ({ item }: { item: Event }) => (
-      <EventCard
-        event={item}
-        currency={currency}
-        language={language}
-        statusLabel={t(`status_${item.status}` as const)}
-        onPress={() => handlePress(item)}
-      />
-    ),
-    [currency, handlePress, language, t]
-  );
-
-  const isLoading = status === "loading" && data.length === 0;
-  const showEmpty = status === "success" && filteredEvents.length === 0;
-  const backgroundClass = isDark ? "bg-background-dark" : "bg-background-light";
-  const searchWrapperClass = `mb-4 flex-row items-center rounded-2xl border px-4 ${
-    isDark
-      ? "border-border-dark bg-card-dark text-text-dark"
-      : "border-border-light bg-card-light text-text-light"
-  }`;
-  const searchIconColor = isDark ? "#94a3b8" : "#64748b";
-  const placeholderColor = isDark ? "#94a3b8" : "#475569";
-  const subtextClass = isDark ? "text-subtext-dark" : "text-subtext-light";
-  const handleAvatarPress = useCallback(() => {
-    const parentNav = rootNavigation.getParent?.();
-    const target = parentNav ?? rootNavigation;
-    target.navigate("Profile");
-  }, [rootNavigation]);
 
   return (
-    <RootDrawer>
-      {(openDrawer) => (
-        <SafeAreaView className={`flex-1 ${backgroundClass}`}>
-          <TopBar
-            title="Eventos"
-            onLeftPress={openDrawer}
-            onRightPress={handleAvatarPress}
-            rightInitials={user?.initials}
-          />
-          <View className="flex-1 px-5 pt-4">
-            <View className={searchWrapperClass}>
-              <Feather name="search" size={16} color={searchIconColor} />
-              <TextInput
-                placeholder={t("searchPlaceholder")}
-                placeholderTextColor={placeholderColor}
-                value={query}
-                onChangeText={setQuery}
-                accessibilityLabel="Search events"
-                className={`ml-3 flex-1 text-base ${
-                  isDark ? "text-text-dark" : "text-text-light"
-                }`}
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 34 }}
+        ListHeaderComponent={
+          <View>
+            <AppHeader
+              title="Eventos"
+              subtitle="Elegi un evento para ver su detalle"
+              pillLabel={`${events.data.length} cargados • ${eventsOnSale} en venta`}
+              onAvatarPress={() => rootNavigation.navigate("Profile" as never)}
+              avatarInitials={user?.initials}
+            />
+
+            <View style={{ paddingHorizontal: 20 }}>
+              <View
                 style={{
-                  height: 44,
-                  minHeight: 44,
-                  paddingVertical: 0,
-                  lineHeight: Platform.OS === "ios" ? 20 : undefined,
-                  textAlignVertical: "center",
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: palette.hairline,
+                  paddingHorizontal: 16,
+                  height: 54,
+                  flexDirection: "row",
+                  alignItems: "center",
                 }}
-              />
-            </View>
-
-            <View className="mb-4 flex-row flex-wrap gap-2">
-              {statusFilters.map((filter) => (
-                <FilterChip
-                  key={filter}
-                  label={t(`status_${filter}` as const)}
-                  active={statusFilter === filter}
-                  onPress={() => setStatusFilter(filter)}
-                />
-              ))}
-            </View>
-
-            {isLoading && (
-              <View className="mt-10 items-center">
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text className={`mt-3 ${subtextClass}`}>
-                  {t("loadingLabel")}...
-                </Text>
-              </View>
-            )}
-
-            {status === "error" && (
-              <View className="mt-6">
-                <EmptyState
-                  title="Error"
-                  description={error ?? "Something went wrong"}
-                />
-                <Button
-                  label={t("retry")}
-                  className="mt-4"
-                  onPress={loadEvents}
+              >
+                <Feather name="search" size={18} color={palette.subtext} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Buscar evento, venue o ciudad"
+                  placeholderTextColor={palette.subtext}
+                  style={{ marginLeft: 12, color: palette.text, flex: 1, fontSize: 15 }}
                 />
               </View>
-            )}
 
-            {!isLoading && status !== "error" && (
-              <>
-                {showEmpty ? (
-                  <EmptyState
-                    title={t("emptyTitle")}
-                    description={t("emptyBody")}
-                  />
-                ) : (
-                  <FlatList
-                    data={filteredEvents}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderItem}
-                    contentContainerStyle={{ paddingBottom: 32 }}
-                    showsVerticalScrollIndicator={false}
-                    refreshing={status === "loading"}
-                    onRefresh={loadEvents}
-                  />
-                )}
-              </>
-            )}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14, marginBottom: 16 }}>
+                {filterLabels.map((item) => {
+                  const active = filter === item.key;
+                  return (
+                    <Pressable
+                      key={item.key}
+                      onPress={() => setFilter(item.key)}
+                      style={{
+                        backgroundColor: active ? palette.primary : palette.surface,
+                        borderRadius: 999,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        borderWidth: 1,
+                        borderColor: active ? palette.primary : palette.hairline,
+                      }}
+                    >
+                      <Text style={{ color: active ? "#fff" : palette.subtext, fontSize: 12, fontWeight: "700" }}>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={{ color: palette.subtext, fontSize: 12, marginBottom: 14 }}>
+                {filtered.length} resultados
+              </Text>
+            </View>
           </View>
-        </SafeAreaView>
-      )}
-    </RootDrawer>
+        }
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
+            style={{ marginBottom: 14, marginHorizontal: 20 }}
+          >
+            <SurfaceCard padded={false} style={{ overflow: "hidden" }}>
+              <Image source={{ uri: item.imageUrl }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+              <View style={{ padding: 16 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800", flex: 1 }}>{item.name}</Text>
+                  <View
+                    style={{
+                      backgroundColor: statusColor(item.status, palette),
+                      borderRadius: 999,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
+                      {item.featuredTag ?? item.status.replace("_", " ").toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}>
+                  {formatDateLong(item.dateISO)} • {item.venue}
+                </Text>
+
+                <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 6 }}>
+                  {formatInteger(item.ticketsSold)} vendidas de {formatInteger(item.ticketsAvailable)} disponibles
+                </Text>
+
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14 }}>
+                  <Text style={{ color: palette.subtext, fontSize: 12 }}>
+                    Velocidad de venta {formatPercent(item.velocity ?? 0)}
+                  </Text>
+                  <Text style={{ color: palette.subtext, fontSize: 12 }}>
+                    Ocupacion {formatPercent((item.ticketsSold / Math.max(item.ticketsAvailable, 1)) * 100)}
+                  </Text>
+                </View>
+              </View>
+            </SurfaceCard>
+          </Pressable>
+        )}
+      />
+    </SafeAreaView>
   );
 };
 

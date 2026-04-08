@@ -14,6 +14,10 @@ export type Event = {
   ticketsAvailable: number;
   ticketPriceARS: number;
   imageUrl?: string;
+  velocity?: number;
+  featuredTag?: string;
+  checkInProgress?: number;
+  grossRevenueARS?: number;
 };
 
 export type User = {

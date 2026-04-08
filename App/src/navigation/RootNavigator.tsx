@@ -1,5 +1,5 @@
-import React from "react";
-import { ActivityIndicator, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { ActivityIndicator, Alert, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -12,7 +12,8 @@ import EventDetailScreen from "../screens/EventDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SectorScreen from "@/screens/SectorScreen";
-import PaymentScreen from "@/screens/PaymentScreen";
+import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
+import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
 import { getNavigationTheme } from "../lib/theme";
 import {
   EventsStackParamList,
@@ -42,33 +43,70 @@ const AuthNavigator = () => (
 );
 
 const RootNavigator = () => {
-  const { status } = useAuth();
+  const {
+    status,
+    shouldPromptBiometricEnrollment,
+    enableBiometric,
+    dismissBiometricEnrollmentPrompt,
+  } = useAuth();
   const { theme } = useAppState();
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
+  const biometricPromptOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!shouldPromptBiometricEnrollment || biometricPromptOpenRef.current) {
+      return;
+    }
+
+    biometricPromptOpenRef.current = true;
+
+    Alert.alert(
+      "Activar biometría",
+      "¿Querés usar biometría para ingresar más rápido la próxima vez?",
+      [
+        {
+          text: "Ahora no",
+          style: "cancel",
+          onPress: () => {
+            biometricPromptOpenRef.current = false;
+            dismissBiometricEnrollmentPrompt();
+          },
+        },
+        {
+          text: "Activar",
+          onPress: async () => {
+            await enableBiometric();
+            biometricPromptOpenRef.current = false;
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [dismissBiometricEnrollmentPrompt, enableBiometric, shouldPromptBiometricEnrollment]);
 
   const tabBarStyle = {
-    backgroundColor: isDark ? "#020617" : "#ffffff",
-    borderTopColor: isDark ? "#1e293b" : "#e2e8f0",
-    borderTopWidth: 1,
-    height: 58 + insets.bottom,
-    paddingTop: 4,
-    paddingBottom: Math.max(insets.bottom, 8),
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: -4 },
-    shadowRadius: 12,
+    backgroundColor: isDark ? "#171717" : "#ffffff",
+    borderTopColor: isDark ? "#2a2a2a" : "#d9dee7",
+    borderTopWidth: 0,
+    height: 68 + insets.bottom,
+    paddingTop: 8,
+    paddingBottom: Math.max(insets.bottom, 10),
+    shadowColor: "#101828",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: -8 },
+    shadowRadius: 24,
   } as const;
 
   const TabsNavigator = () => (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: isDark ? "#60a5fa" : "#0f5cff",
-        tabBarInactiveTintColor: isDark ? "#94a3b8" : "#94a3b8",
+        tabBarActiveTintColor: isDark ? "#aac7ff" : "#0058bc",
+        tabBarInactiveTintColor: isDark ? "#8b91a0" : "#7b8494",
         tabBarStyle,
         tabBarItemStyle: { paddingBottom: 0, paddingTop: 0 },
-        tabBarLabelStyle: { fontSize: 12, marginBottom: 2 },
+        tabBarLabelStyle: { fontSize: 12, marginBottom: 2, fontWeight: "700" },
         tabBarIconStyle: { marginTop: 0 },
       }}
     >
@@ -76,7 +114,7 @@ const RootNavigator = () => {
         name="Dashboard"
         component={DashboardScreen}
         options={{
-          tabBarLabel: "Resumen",
+          tabBarLabel: "Operacion",
           tabBarIcon: ({ color, size }) => (
             <Feather name="pie-chart" color={color} size={size} />
           ),
@@ -93,22 +131,22 @@ const RootNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="Ventas"
-        component={SectorScreen}
+        name="Analytics"
+        component={SalesAnalyticsScreen}
         options={{
           tabBarLabel: "Ventas",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="ticket-outline" size={size} color={color} />
+            <Feather name="bar-chart-2" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="Pago"
-        component={PaymentScreen}
+        name="Venue"
+        component={SectorScreen}
         options={{
-          tabBarLabel: "Pago",
+          tabBarLabel: "Sectores",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="card-outline" size={size} color={color} />
+            <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />
@@ -118,6 +156,7 @@ const RootNavigator = () => {
   const AppNavigator = () => (
     <AppStack.Navigator screenOptions={{ headerShown: false }}>
       <AppStack.Screen name="Tabs" component={TabsNavigator} />
+      <AppStack.Screen name="ExecutiveDashboard" component={ExecutiveDashboardScreen} />
       <AppStack.Screen name="Profile" component={ProfileScreen} />
     </AppStack.Navigator>
   );
@@ -126,7 +165,7 @@ const RootNavigator = () => {
 
   const renderSplash = () => (
     <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-      <ActivityIndicator size="large" color="#0f5cff" />
+      <ActivityIndicator size="large" color="#0058bc" />
     </View>
   );
 

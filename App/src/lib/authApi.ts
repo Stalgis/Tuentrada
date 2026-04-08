@@ -1,4 +1,4 @@
-﻿// lib/authApi.tsx
+// lib/authApi.tsx
 import type { User } from "./types";
 
 export type AuthTokens = {
@@ -23,8 +23,6 @@ type LoginRawResponse = {
   };
 };
 
-// Si en algún momento realmente tenés un flujo de "cambiar contraseña",
-// podés mantener esto. Por ahora lo dejo separado.
 type LoginNeedsPasswordChangeResponse = {
   user: User;
   sessionToken: string;
@@ -88,8 +86,6 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
 
-    // si en algún momento tu backend usa 403 para "debe cambiar contraseña",
-    // este bloque puede seguir existiendo; hoy probablemente nunca se dispare
     if (res.status === 403) {
       const data = (await res.json()) as LoginNeedsPasswordChangeResponse;
       return {
@@ -119,20 +115,6 @@ export const authApi = {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ refreshToken }),
-    });
-
-    const raw = await parseResponse(res);
-    const tokens = toTokens(raw);
-    const user = buildUserFromEmail(raw.data.email);
-
-    return { tokens, user };
-  },
-
-  async changePassword(sessionToken: string, newPassword: string) {
-    const res = await fetch(`${BASE_URL}/change-password`, {
-      method: "POST",
-      headers: baseHeaders,
-      body: JSON.stringify({ sessionToken, newPassword }),
     });
 
     const raw = await parseResponse(res);

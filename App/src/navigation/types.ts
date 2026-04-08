@@ -6,16 +6,16 @@ export type EventsStackParamList = {
 export type RootTabParamList = {
   Dashboard: undefined;
   Events: undefined;
-  Ventas: undefined;
-  Pago: undefined;
+  Analytics: undefined;
+  Venue: undefined;
 };
 
 export type AuthStackParamList = {
   Login: undefined;
-  ChangePassword: undefined;
 };
 
 export type AppStackParamList = {
   Tabs: undefined;
   Profile: undefined;
+  ExecutiveDashboard: undefined;
 };

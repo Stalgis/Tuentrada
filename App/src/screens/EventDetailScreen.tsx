@@ -1,175 +1,132 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { EventsStackParamList } from '../navigation/types';
-import { Event } from '../data/mockEvents';
-import { fetchEventById } from '../lib/apiClient.mock';
-import { useAppState } from '../store/appState';
-import { useAuth } from '../store/auth';
-import { useTranslation } from '../hooks/useTranslation';
-import Chip from '../components/UI/Chip';
-import { formatCurrency } from '../lib/currency';
-import TopBar from '../components/UI/TopBar';
+import React, { useEffect, useMemo } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { Image } from "expo-image";
+import { EventsStackParamList } from "../navigation/types";
+import { useAppState } from "../store/appState";
+import { useAuth } from "../store/auth";
+import { getPalette } from "../lib/theme";
+import AppHeader from "../components/stitch/AppHeader";
+import SurfaceCard from "../components/stitch/SurfaceCard";
+import { formatCurrencyARS, formatDateLong, formatInteger, formatPercent } from "../lib/formatters";
 
-const placeholder = require('../assets/images/placeholder-event.jpg');
-
-type NavigationProp = NativeStackNavigationProp<EventsStackParamList, 'EventDetail'>;
-type RouteProps = RouteProp<EventsStackParamList, 'EventDetail'>;
-
-const dateFormatter = (language: string) =>
-  new Intl.DateTimeFormat(language === 'es' ? 'es-AR' : 'en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+type EventRoute = RouteProp<EventsStackParamList, "EventDetail">;
 
 const EventDetailScreen = () => {
-  const navigation = useNavigation<NavigationProp>();
-  const route = useRoute<RouteProps>();
-  const { eventId } = route.params;
-  const {
-    events: { data },
-    currency,
-    theme,
-  } = useAppState();
-  const { t, language } = useTranslation();
+  const navigation = useNavigation();
+  const route = useRoute<EventRoute>();
+  const { theme, events, loadEvents } = useAppState();
   const { user } = useAuth();
-  const [event, setEvent] = useState<Event | undefined>(() => data.find((item) => item.id === eventId));
-  const [loading, setLoading] = useState(!event);
-
-  const isDark = theme === 'dark';
-  const backgroundClass = isDark ? 'bg-background-dark' : 'bg-background-light';
-  const textClass = isDark ? 'text-text-dark' : 'text-text-light';
-  const subtextClass = isDark ? 'text-subtext-dark' : 'text-subtext-light';
-  const cardClass = `mt-5 rounded-3xl p-5 shadow-card border ${
-    isDark ? 'bg-card-dark border-border-dark' : 'bg-card-light border-border-light'
-  }`;
-  const statusChipClass = isDark ? 'border-0 bg-slate-700' : 'border-0 bg-muted';
-  const statusChipTextClass = isDark ? 'text-white' : '';
-  const eyebrowClass = `text-[11px] font-medium ${
-    isDark ? 'text-subtext-dark' : 'text-subtext-light'
-  }`;
-  const sectionValueClass = `mt-1 text-base ${
-    isDark ? 'text-text-dark' : 'text-text-light'
-  }`;
-  const handleAvatarPress = useCallback(() => {
-    navigation.getParent?.()?.navigate('Profile');
-  }, [navigation]);
+  const palette = getPalette(theme);
 
   useEffect(() => {
-    if (!event) {
-      fetchEventById(eventId)
-        .then((response) => setEvent(response))
-        .catch(() => setEvent(undefined))
-        .finally(() => setLoading(false));
+    if (events.status === "idle") {
+      loadEvents();
     }
-  }, [event, eventId]);
+  }, [events.status, loadEvents]);
 
-  useEffect(() => {
-    if (!event && !loading) {
-      navigation.goBack();
-    }
-  }, [event, loading, navigation]);
+  const event = useMemo(() => events.data.find((item) => item.id === route.params.eventId), [events.data, route.params.eventId]);
+  const sellThrough = useMemo(
+    () => (event ? (event.ticketsSold / Math.max(event.ticketsAvailable, 1)) * 100 : 0),
+    [event]
+  );
 
-  const formattedDate = useMemo(() => (event ? dateFormatter(language).format(new Date(event.dateISO)) : ''), [
-    event,
-    language,
-  ]);
-
-  if (loading || !event) {
+  if (!event) {
     return (
-      <View className={`flex-1 items-center justify-center ${backgroundClass}`}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text className={`mt-3 ${subtextClass}`}>{t('loadingLabel')}...</Text>
-      </View>
+      <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: palette.text }}>Evento no encontrado</Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${backgroundClass}`}>
-      <TopBar
-        title={event.name}
-        onLeftPress={() => navigation.goBack()}
-        onRightPress={handleAvatarPress}
-        rightInitials={user?.initials}
-        leftIcon="back"
-        titleNumberOfLines={1}
-        titleClassName="text-xl"
-      />
-      <ScrollView
-        className="flex-1 px-5 pt-3"
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 20 }}
-      >
-        <Image
-          source={event.imageUrl ? { uri: event.imageUrl } : placeholder}
-          className="h-48 w-full rounded-3xl"
-          contentFit="cover"
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <AppHeader
+          title={event.name}
+          subtitle="Detalle comercial de un evento"
+          onBackPress={() => navigation.goBack()}
+          onAvatarPress={() => navigation.navigate("Profile" as never)}
+          avatarInitials={user?.initials}
         />
 
-        <View className={cardClass.replace('mt-5', 'mt-4')}>
-          <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1">
-              <Text className={eyebrowClass}>Resumen</Text>
-              <Text className={`mt-1 text-lg font-semibold ${textClass}`}>
-                {t('detailsTitle')}
-              </Text>
-            </View>
-            <Chip
-              label={t(`status_${event.status}` as const)}
-              size="sm"
-              disabled
-              className={`mt-0.5 ${statusChipClass}`}
-              textClassName={statusChipTextClass}
-            />
-          </View>
+        <View style={{ paddingHorizontal: 20, gap: 14 }}>
+          <Image source={{ uri: event.imageUrl }} style={{ width: "100%", height: 148, borderRadius: 26 }} contentFit="cover" />
 
-          <View className={`mt-5 rounded-2xl border px-4 py-4 ${
-            isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/70'
-          }`}>
-            <Text className={eyebrowClass}>{t('dateLabel')}</Text>
-            <Text className={`mt-1 text-base font-medium leading-6 ${textClass}`}>
-              {formattedDate}
+          <Text style={{ color: palette.subtext, fontSize: 13, paddingHorizontal: 2 }}>
+            {event.venue} • {event.city} • {formatDateLong(event.dateISO)}
+          </Text>
+
+          <SurfaceCard>
+            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>KPI principal</Text>
+            <Text style={{ color: palette.text, fontSize: 28, fontWeight: "800", marginTop: 8 }}>
+              {formatCurrencyARS(event.grossRevenueARS ?? event.ticketsSold * event.ticketPriceARS)}
             </Text>
+            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}>
+              Ingreso bruto estimado de este evento segun entradas vendidas por precio actual
+            </Text>
+          </SurfaceCard>
+
+          <View style={{ flexDirection: "row", gap: 14 }}>
+            <SurfaceCard style={{ flex: 1 }}>
+              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Ocupacion</Text>
+              <Text style={{ color: palette.text, fontSize: 24, fontWeight: "800", marginTop: 8 }}>
+                {formatPercent(sellThrough)}
+              </Text>
+              <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
+                Porcentaje vendido sobre la capacidad total
+              </Text>
+            </SurfaceCard>
+            <SurfaceCard style={{ flex: 1 }}>
+              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Check-ins</Text>
+              <Text style={{ color: palette.text, fontSize: 24, fontWeight: "800", marginTop: 8 }}>
+                {formatPercent(event.checkInProgress ?? 0)}
+              </Text>
+              <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
+                Porcentaje de asistentes ya ingresados
+              </Text>
+            </SurfaceCard>
           </View>
 
-          <View className="mt-4 flex-row gap-3">
-            <View className={`flex-1 rounded-2xl border px-4 py-4 ${
-              isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/70'
-            }`}>
-              <Text className={eyebrowClass}>{t('venueLabel')}</Text>
-              <Text className={`${sectionValueClass} font-medium`} numberOfLines={2}>
-                {event.venue}
-              </Text>
-              <Text className={`mt-1 text-sm ${subtextClass}`}>{event.city}</Text>
+          <SurfaceCard>
+            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Lectura comercial</Text>
+            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+              Variables base que explican los KPIs de arriba
+            </Text>
+            <View style={{ marginTop: 16, gap: 12 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: palette.subtext, fontSize: 13 }}>Entradas vendidas</Text>
+                <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>{formatInteger(event.ticketsSold)}</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: palette.subtext, fontSize: 13 }}>Capacidad total</Text>
+                <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>{formatInteger(event.ticketsAvailable)}</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: palette.subtext, fontSize: 13 }}>Precio por entrada</Text>
+                <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>{formatCurrencyARS(event.ticketPriceARS)}</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: palette.subtext, fontSize: 13 }}>Estado</Text>
+                <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>
+                  {event.featuredTag ?? event.status.replace("_", " ")}
+                </Text>
+              </View>
             </View>
+          </SurfaceCard>
 
-            <View className={`w-[42%] rounded-2xl border px-4 py-4 ${
-              isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/70'
-            }`}>
-              <Text className={eyebrowClass}>{t('priceLabel')}</Text>
-              <Text className="mt-1 text-2xl font-semibold text-primary-600">
-                {formatCurrency(event.ticketPriceARS, currency)}
-              </Text>
-            </View>
-          </View>
-
-          <View
-            className={`mt-5 rounded-2xl border px-4 py-3 ${
-              isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/70'
-            }`}
+          <Pressable
+            onPress={() => navigation.navigate("EventsList" as never)}
+            style={{
+              backgroundColor: palette.primary,
+              borderRadius: 999,
+              paddingVertical: 15,
+              alignItems: "center",
+            }}
           >
-            <Text className={eyebrowClass}>Próximamente</Text>
-            <Text className={`mt-1 text-sm ${subtextClass}`}>
-              Más información disponible próximamente.
-            </Text>
-          </View>
+            <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>Volver a la lista de eventos</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>

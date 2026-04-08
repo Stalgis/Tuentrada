@@ -1,255 +1,311 @@
 import React, {
   createContext,
-  useContext,
-  useState,
-  useEffect,
   useCallback,
-  useRef,
+  useContext,
+  useEffect,
   useMemo,
-} from 'react';
-import { Alert, Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-import { enableBioMetric, checkBiometricSupport } from 'react-native-biometric-check';
-import type { PropsWithChildren } from 'react';
-import { authApi, type AuthTokens } from '../lib/authApi';
-import type { User } from '../lib/types';
+  useRef,
+  useState,
+} from "react";
+import { Alert, Platform } from "react-native";
+import Constants from "expo-constants";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
+import type { PropsWithChildren } from "react";
+import { authApi, type AuthTokens } from "../lib/authApi";
+import type { User } from "../lib/types";
 
-export type AuthStatus = 'checking' | 'unauthenticated' | 'needsPasswordChange' | 'authenticated';
+export type AuthStatus = "checking" | "unauthenticated" | "authenticated";
 
 type AuthContextValue = {
   status: AuthStatus;
   user?: User;
   accessToken?: string;
-  sessionToken?: string;
   biometricEnabled: boolean;
+  biometricAvailable: boolean;
+  shouldPromptBiometricEnrollment: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  changePassword: (newPassword: string) => Promise<void>;
+  loginWithBiometric: () => Promise<void>;
   logout: () => Promise<void>;
   enableBiometric: () => Promise<boolean>;
   disableBiometric: () => Promise<void>;
+  dismissBiometricEnrollmentPrompt: () => void;
+};
+
+type StoredBiometricCredentials = {
+  email: string;
+  password: string;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const AUTH_BYPASS_ENABLED = false; // set true only for local UI work without backend
+const AUTH_BYPASS_ENABLED = false;
 const AUTH_BYPASS_USER: User = {
-  id: 'dev-bypass',
-  name: 'Dashboard Preview',
-  initials: 'DP',
-  email: 'bypass@tuentrada.com',
+  id: "dev-bypass",
+  name: "Dashboard Preview",
+  initials: "DP",
+  email: "bypass@tuentrada.com",
 };
 const AUTH_BYPASS_CONTEXT: AuthContextValue = {
-  status: 'authenticated',
+  status: "authenticated",
   user: AUTH_BYPASS_USER,
-  accessToken: 'dev-bypass',
-  sessionToken: undefined,
+  accessToken: "dev-bypass",
   biometricEnabled: false,
+  biometricAvailable: false,
+  shouldPromptBiometricEnrollment: false,
   loading: false,
   login: async () => {},
-  changePassword: async () => {},
+  loginWithBiometric: async () => {},
   logout: async () => {},
   enableBiometric: async () => false,
   disableBiometric: async () => {},
+  dismissBiometricEnrollmentPrompt: () => {},
 };
 
-const REFRESH_TOKEN_KEY = 'tuentrada_refresh_token';
-const BIOMETRIC_FLAG_KEY = 'tuentrada_biometric_enabled';
+const BIOMETRIC_FLAG_KEY = "tuentrada_biometric_enabled";
+const BIOMETRIC_CREDENTIALS_KEY = "tuentrada_biometric_credentials";
+const IS_EXPO_GO = Constants.appOwnership === "expo";
 
-const BIOMETRIC_PROMPT_TITLE = Platform.OS === 'ios' ? 'Face ID' : 'Biometria';
-const BIOMETRIC_PROMPT_SUBTITLE =
-  Platform.OS === 'ios'
-    ? 'Autoriza el acceso con Face ID o codigo de seguridad.'
-    : 'Usa tu huella, rostro o PIN para continuar.';
+const BIOMETRIC_PROMPT_MESSAGES = {
+  promptMessage: Platform.OS === "ios" ? "Confirmá con Face ID" : "Confirmá con biometría",
+  cancelLabel: "Cancelar",
+  fallbackLabel: "Usar código",
+};
 
-const useBiometricPrompt = () => {
-  const runPrompt = useCallback(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        if (Platform.OS === 'ios') {
-          enableBioMetric(BIOMETRIC_PROMPT_TITLE, BIOMETRIC_PROMPT_SUBTITLE, (result: unknown) => {
-            if (result === 5) {
-              resolve();
-            } else {
-              reject(typeof result === 'string' ? new Error(result) : new Error('FACE_ID_DENIED'));
-            }
-          });
-          return;
-        }
+const secureStoreOptions: SecureStore.SecureStoreOptions = {
+  requireAuthentication: true,
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+};
 
-        checkBiometricSupport((support: unknown) => {
-          if (support !== 'SUCCESS') {
-            reject(new Error(String(support)));
-            return;
-          }
+const isCredentialsPayload = (value: unknown): value is StoredBiometricCredentials => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
 
-          enableBioMetric(BIOMETRIC_PROMPT_TITLE, BIOMETRIC_PROMPT_SUBTITLE, (result: unknown) => {
-            if (result === 'BIOMETRICS_SUCCESS') {
-              resolve();
-            } else {
-              reject(new Error(String(result)));
-            }
-          });
-        });
-      }),
-    [],
-  );
-
-  return runPrompt;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.email === "string" && typeof candidate.password === "string";
 };
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
-  if (AUTH_BYPASS_ENABLED) {
-    return <AuthContext.Provider value={AUTH_BYPASS_CONTEXT}>{children}</AuthContext.Provider>;
-  }
-
-  const [status, setStatus] = useState<AuthStatus>('checking');
+  const [status, setStatus] = useState<AuthStatus>("checking");
   const [user, setUser] = useState<User | undefined>(undefined);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
-  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [shouldPromptBiometricEnrollment, setShouldPromptBiometricEnrollment] = useState(false);
   const [loading, setLoading] = useState(false);
-  const refreshTokenRef = useRef<string | null>(null);
-  const promptBiometric = useBiometricPrompt();
+  const pendingCredentialsRef = useRef<StoredBiometricCredentials | null>(null);
 
-  const persistTokens = useCallback(async (tokens: AuthTokens) => {
-    const refreshToken = tokens.refreshToken ?? null;
-    refreshTokenRef.current = refreshToken;
-
-    if (refreshToken) {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
-    } else {
-      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-    }
-
-    setAccessToken(tokens.accessToken);
+  const clearBiometricStorage = useCallback(async () => {
+    await Promise.all([
+      SecureStore.deleteItemAsync(BIOMETRIC_FLAG_KEY),
+      SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY),
+    ]);
+    setBiometricEnabled(false);
   }, []);
 
-  const clearStorage = useCallback(async () => {
-    refreshTokenRef.current = null;
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  const getBiometricAvailability = useCallback(async () => {
+    if (IS_EXPO_GO) {
+      return false;
+    }
+
+    try {
+      const [hasHardware, isEnrolled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+      ]);
+      return hasHardware && isEnrolled;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const promptBiometric = useCallback(async () => {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: BIOMETRIC_PROMPT_MESSAGES.promptMessage,
+      cancelLabel: BIOMETRIC_PROMPT_MESSAGES.cancelLabel,
+      fallbackLabel: BIOMETRIC_PROMPT_MESSAGES.fallbackLabel,
+      biometricsSecurityLevel: "strong",
+      disableDeviceFallback: false,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error ?? "BIOMETRIC_AUTH_FAILED");
+    }
+  }, []);
+
+  const persistBiometricCredentials = useCallback(async (credentials: StoredBiometricCredentials) => {
+    await SecureStore.setItemAsync(
+      BIOMETRIC_CREDENTIALS_KEY,
+      JSON.stringify(credentials),
+      secureStoreOptions,
+    );
+    await SecureStore.setItemAsync(BIOMETRIC_FLAG_KEY, "true");
+    setBiometricEnabled(true);
+  }, []);
+
+  const readBiometricCredentials = useCallback(async () => {
+    const payload = await SecureStore.getItemAsync(BIOMETRIC_CREDENTIALS_KEY, secureStoreOptions);
+    if (!payload) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      return isCredentialsPayload(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
   }, []);
 
   const handleAuthSuccess = useCallback(
     async ({ tokens, nextUser }: { tokens: AuthTokens; nextUser: User }) => {
-      await persistTokens(tokens);
+      setAccessToken(tokens.accessToken);
       setUser(nextUser);
-      setStatus('authenticated');
-      setSessionToken(undefined);
+      setStatus("authenticated");
     },
-    [persistTokens],
+    [],
   );
 
-  const bootstrapAuth = useCallback(async () => {
-    try {
-      const [storedRefresh, storedBiometricFlag] = await Promise.all([
-        SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const [hasBiometric, biometricFlag] = await Promise.all([
+        getBiometricAvailability(),
         SecureStore.getItemAsync(BIOMETRIC_FLAG_KEY),
       ]);
 
-      const hasBiometric = storedBiometricFlag === 'true';
-      setBiometricEnabled(hasBiometric);
+      setBiometricAvailable(hasBiometric);
 
-      if (!storedRefresh) {
-        setStatus('unauthenticated');
-        return;
+      if (biometricFlag === "true" && hasBiometric) {
+        setBiometricEnabled(true);
+      } else if (biometricFlag === "true" && !hasBiometric) {
+        await clearBiometricStorage();
       }
 
-      if (hasBiometric) {
-        try {
-          await promptBiometric();
-        } catch (error) {
-          await clearStorage();
-          setStatus('unauthenticated');
-          Alert.alert('Biometria', 'No se pudo validar tu identidad. Inicia sesion manualmente.');
-          return;
-        }
-      }
+      setStatus("unauthenticated");
+    };
 
-      const { tokens, user: nextUser } = await authApi.refresh(storedRefresh);
-      await persistTokens(tokens);
-      setUser(nextUser);
-      setStatus('authenticated');
-    } catch (error) {
-      await clearStorage();
-      setStatus('unauthenticated');
-    }
-  }, [clearStorage, persistTokens, promptBiometric]);
-
-  useEffect(() => {
     bootstrapAuth();
-  }, [bootstrapAuth]);
+  }, [clearBiometricStorage, getBiometricAvailability]);
+
+  const enableBiometric = useCallback(async () => {
+    const pendingCredentials = pendingCredentialsRef.current;
+
+    if (!pendingCredentials) {
+      Alert.alert("Biometría", "Iniciá sesión con tu contraseña para activar el acceso rápido.");
+      return false;
+    }
+
+    if (IS_EXPO_GO) {
+      Alert.alert(
+        "Biometría",
+        "En Expo Go no se puede probar este flujo de forma real. Necesitás un development build o build nativa.",
+      );
+      return false;
+    }
+
+    const hasBiometric = await getBiometricAvailability();
+    setBiometricAvailable(hasBiometric);
+
+    if (!hasBiometric) {
+      Alert.alert("Biometría", "Este dispositivo no tiene biometría disponible o configurada.");
+      return false;
+    }
+
+    try {
+      await promptBiometric();
+      await persistBiometricCredentials(pendingCredentials);
+      setShouldPromptBiometricEnrollment(false);
+      return true;
+    } catch {
+      Alert.alert("Biometría", "No se pudo activar el acceso rápido biométrico.");
+      return false;
+    }
+  }, [getBiometricAvailability, persistBiometricCredentials, promptBiometric]);
+
+  const disableBiometric = useCallback(async () => {
+    await clearBiometricStorage();
+    setShouldPromptBiometricEnrollment(false);
+  }, [clearBiometricStorage]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setLoading(true);
       try {
-        const response = await authApi.login(email.trim(), password);
-        if (response.status === 'needsPasswordChange') {
-          const sessionToken = (response as { sessionToken: string }).sessionToken;
-          await persistTokens({
-            accessToken: sessionToken,
-            refreshToken: null,
-            expiresAt: undefined,
-          });
+        const normalizedEmail = email.trim();
+        const response = await authApi.login(normalizedEmail, password);
+
+        if (response.status === "needsPasswordChange") {
+          setAccessToken(response.sessionToken);
           setUser(response.user);
-          setStatus('authenticated');
-          setSessionToken(undefined);
+          setStatus("authenticated");
           return;
         }
+
+        pendingCredentialsRef.current = {
+          email: normalizedEmail,
+          password,
+        };
+
         await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
+
+        if (!biometricEnabled && biometricAvailable) {
+          setShouldPromptBiometricEnrollment(true);
+        }
       } finally {
         setLoading(false);
       }
     },
-    [handleAuthSuccess, persistTokens],
+    [biometricAvailable, biometricEnabled, handleAuthSuccess],
   );
 
-  const changePassword = useCallback(
-    async (newPassword: string) => {
-      if (!sessionToken) {
-        throw new Error('Sesion no disponible');
-      }
-      setLoading(true);
-      try {
-        const { tokens, user: nextUser } = await authApi.changePassword(sessionToken, newPassword);
-        await handleAuthSuccess({ tokens, nextUser });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [handleAuthSuccess, sessionToken],
-  );
-
-  const logout = useCallback(async () => {
-    setStatus('unauthenticated');
-    setUser(undefined);
-    setAccessToken(undefined);
-    setSessionToken(undefined);
-    await clearStorage();
-    await SecureStore.deleteItemAsync(BIOMETRIC_FLAG_KEY);
-    setBiometricEnabled(false);
-  }, [clearStorage]);
-
-  const enableBiometric = useCallback(async () => {
-    if (!refreshTokenRef.current) {
-      Alert.alert('Biometria', 'Inicia sesion para activar Face ID.');
-      return false;
+  const loginWithBiometric = useCallback(async () => {
+    if (!biometricEnabled) {
+      throw new Error("La biometría no está activada.");
     }
+
+    setLoading(true);
     try {
       await promptBiometric();
-      await SecureStore.setItemAsync(BIOMETRIC_FLAG_KEY, 'true');
-      setBiometricEnabled(true);
-      return true;
-    } catch (error) {
-      Alert.alert('Biometria', 'No se pudo habilitar Face ID / biometria.');
-      return false;
-    }
-  }, [promptBiometric]);
+      const credentials = await readBiometricCredentials();
 
-  const disableBiometric = useCallback(async () => {
-    await SecureStore.deleteItemAsync(BIOMETRIC_FLAG_KEY);
-    setBiometricEnabled(false);
+      if (!credentials) {
+        await clearBiometricStorage();
+        throw new Error("Tu acceso biométrico venció. Iniciá sesión con tu contraseña.");
+      }
+
+      const response = await authApi.login(credentials.email, credentials.password);
+
+      if (response.status !== "authenticated") {
+        await clearBiometricStorage();
+        throw new Error("Necesitás iniciar sesión manualmente para reactivar biometría.");
+      }
+
+      pendingCredentialsRef.current = credentials;
+      await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
+      setShouldPromptBiometricEnrollment(false);
+    } catch (error) {
+      if (error instanceof Error && error.message === "user_cancel") {
+        throw new Error("Cancelaste la validación biométrica.");
+      }
+      throw error instanceof Error ? error : new Error("No se pudo iniciar sesión con biometría.");
+    } finally {
+      setLoading(false);
+    }
+  }, [biometricEnabled, clearBiometricStorage, handleAuthSuccess, promptBiometric, readBiometricCredentials]);
+
+  const logout = useCallback(async () => {
+    setStatus("unauthenticated");
+    setUser(undefined);
+    setAccessToken(undefined);
+    pendingCredentialsRef.current = null;
+    setShouldPromptBiometricEnrollment(false);
+    await clearBiometricStorage();
+  }, [clearBiometricStorage]);
+
+  const dismissBiometricEnrollmentPrompt = useCallback(() => {
+    setShouldPromptBiometricEnrollment(false);
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -257,29 +313,37 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       status,
       user,
       accessToken,
-      sessionToken,
       biometricEnabled,
+      biometricAvailable,
+      shouldPromptBiometricEnrollment,
       loading,
       login,
-      changePassword,
+      loginWithBiometric,
       logout,
       enableBiometric,
       disableBiometric,
+      dismissBiometricEnrollmentPrompt,
     }),
     [
       accessToken,
+      biometricAvailable,
       biometricEnabled,
-      changePassword,
       disableBiometric,
+      dismissBiometricEnrollmentPrompt,
+      enableBiometric,
       loading,
       login,
+      loginWithBiometric,
       logout,
-      sessionToken,
+      shouldPromptBiometricEnrollment,
       status,
       user,
-      enableBiometric,
     ],
   );
+
+  if (AUTH_BYPASS_ENABLED) {
+    return <AuthContext.Provider value={AUTH_BYPASS_CONTEXT}>{children}</AuthContext.Provider>;
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -287,7 +351,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth debe usarse dentro de AuthProvider');
+    throw new Error("useAuth debe usarse dentro de AuthProvider");
   }
   return context;
 };

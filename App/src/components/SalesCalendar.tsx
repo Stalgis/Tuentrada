@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Calendar, type MarkedDates } from "react-native-calendars";
-import { type DateObject } from "react-native-calendars/src/types";
+import { Calendar } from "react-native-calendars";
 import type { DailySalesSummary } from "../data/mockEventAnalytics";
 import { useAppState } from "../store/appState";
 
@@ -13,6 +12,26 @@ type DayEntry = {
   ticketsSold: number;
   invitations: number;
   revenueARS: number;
+};
+
+type MarkedDates = Record<
+  string,
+  {
+    customStyles: {
+      container: {
+        backgroundColor: string;
+        borderRadius: number;
+      };
+      text: {
+        color: string;
+        fontWeight: "700";
+      };
+    };
+  }
+>;
+
+type DateObject = {
+  dateString: string;
 };
 
 const themeTokens = {

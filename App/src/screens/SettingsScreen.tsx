@@ -28,7 +28,7 @@ const showToast = (message: string) => {
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const { biometricEnabled, enableBiometric, disableBiometric, logout } = useAuth();
+  const { biometricEnabled, disableBiometric, logout } = useAuth();
   const { language, setLanguage, clearEventsCache, themePreference, setTheme, theme, currency } = useAppState();
   const { t } = useTranslation();
   const isDark = theme === 'dark';
@@ -118,12 +118,14 @@ const SettingsScreen = () => {
             <Text className={`mt-1 text-xs ${subtextClass}`}>
               {biometricEnabled ? t('faceIdDisableHint') : t('faceIdEnableHint')}
             </Text>
-            <Button
-              label={biometricEnabled ? t('faceIdDisable') : t('faceIdEnable')}
-              variant="ghost"
-              className="mt-3"
-              onPress={biometricEnabled ? disableBiometric : enableBiometric}
-            />
+            {biometricEnabled ? (
+              <Button
+                label={t('faceIdDisable')}
+                variant="ghost"
+                className="mt-3"
+                onPress={disableBiometric}
+              />
+            ) : null}
           </View>
         </Section>
 

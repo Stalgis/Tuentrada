@@ -1,23 +1,15 @@
-import React from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, ToastAndroid, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Avatar from '../components/Avatar';
-import Chip from '../components/UI/Chip';
-import Button from '../components/UI/Button';
-import Section from '../components/UI/Section';
-import { useAppState } from '../store/appState';
-import { useAuth } from '../store/auth';
-import { useTranslation } from '../hooks/useTranslation';
-import PageHeader from '../components/UI/PageHeader';
-import { AppStackParamList } from '../navigation/types';
-
-const languageOptions: { value: 'en' | 'es'; label: string }[] = [
-  { value: 'en', label: 'EN' },
-  { value: 'es', label: 'ES' },
-];
+import React from "react";
+import { Alert, Platform, Pressable, ScrollView, Text, ToastAndroid, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AppStackParamList } from "../navigation/types";
+import AppHeader from "../components/stitch/AppHeader";
+import SurfaceCard from "../components/stitch/SurfaceCard";
+import { useAppState } from "../store/appState";
+import { useAuth } from "../store/auth";
+import { useTranslation } from "../hooks/useTranslation";
+import { getPalette } from "../lib/theme";
 
 const showToast = (message: string) => {
   if (Platform.OS === 'android') {
@@ -29,126 +21,92 @@ const showToast = (message: string) => {
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const { user, biometricEnabled, enableBiometric, disableBiometric, logout } = useAuth();
+  const { user, biometricEnabled, disableBiometric, logout } = useAuth();
   const {
-    language,
-    setLanguage,
-    clearEventsCache,
     themePreference,
     setTheme,
     theme,
   } = useAppState();
   const { t } = useTranslation();
-  const isDark = theme === 'dark';
-  const iconColor = isDark ? '#e2e8f0' : '#0f172a';
-  const backgroundClass = isDark ? 'bg-background-dark' : 'bg-background-light';
-  const textClass = isDark ? 'text-text-dark' : 'text-text-light';
-  const subtextClass = isDark ? 'text-subtext-dark' : 'text-subtext-light';
-  const cardClass = `rounded-3xl p-5 shadow-card border ${
-    isDark ? 'bg-card-dark border-border-dark' : 'bg-card-light border-border-light'
-  }`;
-  const panelClass = `rounded-2xl border p-4 ${
-    isDark ? 'border-border-dark bg-card-dark' : 'border-border-light bg-card-light'
-  }`;
+  const palette = getPalette(theme);
 
   const handleSignOut = () => {
     showToast(t('signOutToast'));
     logout();
   };
 
-  const handleClearCache = () => {
-    clearEventsCache();
-    showToast(t('clearCacheToast'));
-  };
-
   return (
-    <SafeAreaView className={`flex-1 ${backgroundClass}`}>
-      <PageHeader
-        title="Perfil"
-        leftAccessory={
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <AppHeader title="Perfil" subtitle="Preferencias" onBackPress={() => navigation.goBack()} />
+        <View style={{ paddingHorizontal: 20, gap: 14 }}>
+          <SurfaceCard>
+            <Text style={{ color: palette.text, fontSize: 24, fontWeight: "800" }}>{user?.name ?? "Dashboard Preview"}</Text>
+            <Text style={{ color: palette.subtext, fontSize: 14, marginTop: 6 }}>{user?.email ?? "preview@tuentrada.com"}</Text>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Apariencia</Text>
+            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
+              Cambia entre modo claro, oscuro o sistema.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+              {[
+                { key: "light", label: "Claro" },
+                { key: "dark", label: "Oscuro" },
+                { key: "system", label: "Sistema" },
+              ].map((option) => {
+                const active = themePreference === option.key;
+                return (
+                  <Pressable
+                    key={option.key}
+                    onPress={() => setTheme(option.key as typeof themePreference)}
+                    style={{
+                      backgroundColor: active ? palette.primary : palette.surfaceMuted,
+                      borderRadius: 999,
+                      paddingHorizontal: 16,
+                      paddingVertical: 11,
+                    }}
+                  >
+                    <Text style={{ color: active ? "#fff" : palette.subtext, fontWeight: "700" }}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{t("securityTitle")}</Text>
+            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>{t("securityBody")}</Text>
+            {biometricEnabled ? (
+              <Pressable
+                onPress={disableBiometric}
+                style={{
+                  marginTop: 16,
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: 20,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ color: palette.text, fontWeight: "700" }}>{t("faceIdDisable")}</Text>
+              </Pressable>
+            ) : null}
+          </SurfaceCard>
+
           <Pressable
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            className="rounded-full bg-card-light p-2 border border-border-light dark:bg-card-dark dark:border-border-dark"
+            onPress={handleSignOut}
+            style={{
+              backgroundColor: palette.primary,
+              borderRadius: 999,
+              paddingVertical: 16,
+              alignItems: "center",
+              marginTop: 6,
+            }}
           >
-            <Feather name="arrow-left" size={20} color={iconColor} />
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{t("signOut")}</Text>
           </Pressable>
-        }
-      />
-      <ScrollView className="flex-1 px-5 pt-4" contentInsetAdjustmentBehavior="automatic">
-        <View className={`mb-6 flex-row items-center ${cardClass}`}>
-          <Avatar initials={user?.initials ?? 'TU'} size="lg" />
-          <View className="ml-4">
-            <Text className={`text-lg font-semibold ${textClass}`}>
-              {user?.name ?? 'Promoter'}
-            </Text>
-            <Text className={subtextClass}>{user?.email}</Text>
-          </View>
         </View>
-
-        <Section title={t('languageLabel')}>
-          <View className="flex-row gap-3">
-            {languageOptions.map((option) => (
-              <Chip
-                key={option.value}
-                label={option.label}
-                selected={language === option.value}
-                onPress={() => setLanguage(option.value)}
-                accessibilityLabel={`Switch language to ${option.label}`}
-              />
-            ))}
-          </View>
-        </Section>
-
-        <Section title="Apariencia">
-          <Text className={`text-base ${subtextClass}`}>Elegi entre modo claro, oscuro o seguir el esquema del dispositivo.</Text>
-          <View className="mt-3 flex-row gap-3">
-            <Chip
-              label="Sistema"
-              selected={themePreference === 'system'}
-              onPress={() => setTheme('system')}
-              accessibilityLabel="Usar tema segun el dispositivo"
-            />
-            <Chip
-              label="Light"
-              selected={themePreference === 'light'}
-              onPress={() => setTheme('light')}
-              accessibilityLabel="Cambiar a modo claro"
-            />
-            <Chip
-              label="Dark"
-              selected={themePreference === 'dark'}
-              onPress={() => setTheme('dark')}
-              accessibilityLabel="Cambiar a modo oscuro"
-            />
-          </View>
-        </Section>
-
-        <Section title={t('securityTitle')}>
-          <Text className={`text-base ${subtextClass}`}>{t('securityBody')}</Text>
-          <View className={`mt-4 ${panelClass}`}>
-            <Text className={`text-sm font-semibold ${textClass}`}>
-              {biometricEnabled ? t('faceIdStatusEnabled') : t('faceIdStatusDisabled')}
-            </Text>
-            <Text className={`mt-1 text-xs ${subtextClass}`}>
-              {biometricEnabled ? t('faceIdDisableHint') : t('faceIdEnableHint')}
-            </Text>
-            <Button
-              label={biometricEnabled ? t('faceIdDisable') : t('faceIdEnable')}
-              variant="ghost"
-              className="mt-3"
-              onPress={biometricEnabled ? disableBiometric : enableBiometric}
-            />
-          </View>
-        </Section>
-
-        <Section title={t('aboutTitle')}>
-          <Text className={`text-base ${subtextClass}`}>{t('aboutBody')}</Text>
-          <View className="mt-4 flex-row gap-3">
-            <Button label={t('clearCache')} variant="ghost" className="flex-1" onPress={handleClearCache} />
-            <Button label={t('signOut')} className="flex-1" onPress={handleSignOut} />
-          </View>
-        </Section>
       </ScrollView>
     </SafeAreaView>
   );

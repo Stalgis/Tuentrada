@@ -1,32 +1,46 @@
-import { DefaultTheme, DarkTheme, Theme as NavigationTheme } from '@react-navigation/native';
+import { DefaultTheme, DarkTheme, Theme as NavigationTheme } from "@react-navigation/native";
 
 export const lightPalette = {
-  background: '#f8fafc',
-  card: '#ffffff',
-  primary: '#0f5cff',
-  text: '#0f172a',
-  subtext: '#475569',
-  border: '#e2e8f0',
-  muted: '#f1f5f9',
-  success: '#16a34a',
-  warning: '#eab308',
+  background: "#f7f9fb",
+  surface: "#ffffff",
+  surfaceMuted: "#f2f4f6",
+  surfaceEmphasis: "#e8f1ff",
+  card: "#ffffff",
+  primary: "#0058bc",
+  primarySoft: "#d8e2ff",
+  secondary: "#405e96",
+  text: "#191c1e",
+  subtext: "#5d6472",
+  border: "#d9dee7",
+  hairline: "rgba(113,119,134,0.16)",
+  muted: "#eceef0",
+  success: "#37b26c",
+  warning: "#f2a640",
+  danger: "#e56b6f",
 };
 
 export const darkPalette = {
-  background: '#0f172a',
-  card: '#0b1220',
-  primary: '#4f8bff',
-  text: '#e2e8f0',
-  subtext: '#94a3b8',
-  border: '#1e293b',
-  muted: '#111827',
-  success: '#22c55e',
-  warning: '#f59e0b',
+  background: "#131313",
+  surface: "#201f1f",
+  surfaceMuted: "#2a2a2a",
+  surfaceEmphasis: "#1a2a40",
+  card: "#201f1f",
+  primary: "#3e90ff",
+  primarySoft: "#264778",
+  secondary: "#aac7ff",
+  text: "#e5e2e1",
+  subtext: "#aeb5c0",
+  border: "#353534",
+  hairline: "rgba(139,145,160,0.18)",
+  muted: "#1c1b1b",
+  success: "#5fd48e",
+  warning: "#ffb55f",
+  danger: "#ff8e8e",
 };
 
 export type AppTheme = typeof lightPalette;
-export type ThemeName = 'light' | 'dark';
-export type ThemePreference = ThemeName | 'system';
+export type ThemeName = "light" | "dark";
+export type ThemePreference = ThemeName | "system";
 
 export const lightTheme: AppTheme = lightPalette;
 export const darkTheme: AppTheme = darkPalette;
@@ -43,6 +57,7 @@ export const getNavigationTheme = (theme: ThemeName): NavigationTheme =>
           border: darkPalette.border,
           primary: darkPalette.primary,
           text: darkPalette.text,
+          notification: darkPalette.primary,
         },
       }
     : {
@@ -54,5 +69,6 @@ export const getNavigationTheme = (theme: ThemeName): NavigationTheme =>
           border: lightPalette.border,
           primary: lightPalette.primary,
           text: lightPalette.text,
+          notification: lightPalette.primary,
         },
       };
