@@ -9,11 +9,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import DashboardScreen from "../screens/DashboardScreen";
 import EventsListScreen from "../screens/EventsListScreen";
 import EventDetailScreen from "../screens/EventDetailScreen";
+import FunctionDetailScreen from "../screens/FunctionDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SectorScreen from "@/screens/SectorScreen";
 import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
+import TrendDetailScreen from "@/screens/TrendDetailScreen";
+import PaymentScreen from "@/screens/PaymentScreen";
 import { getNavigationTheme } from "../lib/theme";
 import {
   EventsStackParamList,
@@ -33,6 +36,7 @@ const EventsNavigator = () => (
   <EventsStack.Navigator screenOptions={{ headerShown: false }}>
     <EventsStack.Screen name="EventsList" component={EventsListScreen} />
     <EventsStack.Screen name="EventDetail" component={EventDetailScreen} />
+    <EventsStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
   </EventsStack.Navigator>
 );
 
@@ -114,7 +118,7 @@ const RootNavigator = () => {
         name="Dashboard"
         component={DashboardScreen}
         options={{
-          tabBarLabel: "Operacion",
+          tabBarLabel: "Operación",
           tabBarIcon: ({ color, size }) => (
             <Feather name="pie-chart" color={color} size={size} />
           ),
@@ -142,11 +146,11 @@ const RootNavigator = () => {
       />
       <Tab.Screen
         name="Venue"
-        component={SectorScreen}
+        component={PaymentScreen}
         options={{
-          tabBarLabel: "Sectores",
+          tabBarLabel: "Pagos",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
+            <Feather name="credit-card" size={size} color={color} />
           ),
         }}
       />
@@ -158,6 +162,7 @@ const RootNavigator = () => {
       <AppStack.Screen name="Tabs" component={TabsNavigator} />
       <AppStack.Screen name="ExecutiveDashboard" component={ExecutiveDashboardScreen} />
       <AppStack.Screen name="Profile" component={ProfileScreen} />
+      <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
     </AppStack.Navigator>
   );
 

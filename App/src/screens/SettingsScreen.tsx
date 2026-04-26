@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, ToastAndroid, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,13 +18,6 @@ const languageOptions: { value: 'en' | 'es'; label: string }[] = [
   { value: 'es', label: 'ES' },
 ];
 
-const showToast = (message: string) => {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(message, ToastAndroid.SHORT);
-  } else {
-    Alert.alert(message);
-  }
-};
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -41,13 +34,19 @@ const SettingsScreen = () => {
   }`;
 
   const handleSignOut = () => {
-    showToast(t('signOutToast'));
-    logout();
+    Alert.alert(
+      t('signOutConfirmTitle'),
+      t('signOutConfirmMessage'),
+      [
+        { text: t('signOutConfirmCancel'), style: 'cancel' },
+        { text: t('signOut'), style: 'destructive', onPress: () => { logout(); } },
+      ],
+    );
   };
 
   const handleClearCache = () => {
     clearEventsCache();
-    showToast(t('clearCacheToast'));
+    Alert.alert(t('clearCacheToast'));
   };
 
   return (
@@ -85,14 +84,14 @@ const SettingsScreen = () => {
 
         <Section title="Apariencia">
           <Text className={`text-base ${subtextClass}`}>
-            Elegi entre modo claro, oscuro o seguir el esquema del dispositivo.
+            Elegí entre modo claro, oscuro o seguir el esquema del dispositivo.
           </Text>
           <View className="mt-3 flex-row gap-3">
             <Chip
               label="Sistema"
               selected={themePreference === 'system'}
               onPress={() => setTheme('system')}
-              accessibilityLabel="Usar tema segun el dispositivo"
+              accessibilityLabel="Usar tema según el dispositivo"
             />
             <Chip
               label="Light"
@@ -131,7 +130,7 @@ const SettingsScreen = () => {
 
         <Section title="Cuenta">
           <Text className={`text-base ${subtextClass}`}>
-            Administra tu sesion y la seguridad de tu cuenta.
+            Administrá tu sesión y la seguridad de tu cuenta.
           </Text>
           <Button label={t('signOut')} className="mt-4" onPress={handleSignOut} />
         </Section>

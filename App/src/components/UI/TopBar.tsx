@@ -52,7 +52,7 @@ const TopBar = ({
         hitSlop={8}
         disabled={!onLeftPress}
         accessibilityRole="button"
-        accessibilityLabel={leftIcon === "back" ? "Volver" : "Abrir menu"}
+        accessibilityLabel={leftIcon === "back" ? "Volver" : "Abrir menú"}
         accessibilityState={{ disabled: !onLeftPress }}
         className={`mr-3 ${leftButtonClass} ${!onLeftPress ? "opacity-60" : ""}`}
       >

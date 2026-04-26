@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
-import { fetchEvents } from '../lib/apiClient.mock';
+import { fetchEvents, invalidateEventsCache } from '../lib/apiClient';
 import type { CurrencyCode, Event, EventMetrics, Language } from '../lib/types';
 import type { ThemeName, ThemePreference } from '../lib/theme';
 
@@ -21,7 +21,7 @@ type AppState = {
   events: EventsState;
   setLanguage: (lang: Language) => void;
   setTheme: (theme: ThemePreference) => void;
-  loadEvents: () => Promise<void>;
+  loadEvents: (token: string) => Promise<void>;
   clearEventsCache: () => void;
 };
 
@@ -39,7 +39,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     status: 'idle',
   });
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (token: string) => {
     if (events.status === 'loading') {
       return;
     }
@@ -51,7 +51,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     }));
 
     try {
-      const response = await fetchEvents();
+      const response = await fetchEvents(token);
       setEvents({
         data: response,
         status: 'success',
@@ -66,6 +66,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   }, [events.status]);
 
   const clearEventsCache = useCallback(() => {
+    invalidateEventsCache();
     setEvents({
       data: [],
       status: 'idle',

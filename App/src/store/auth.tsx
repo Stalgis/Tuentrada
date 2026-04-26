@@ -13,6 +13,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import type { PropsWithChildren } from "react";
 import { authApi, type AuthTokens } from "../lib/authApi";
+import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
 import type { User } from "../lib/types";
 
 export type AuthStatus = "checking" | "unauthenticated" | "authenticated";
@@ -296,13 +297,25 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [biometricEnabled, clearBiometricStorage, handleAuthSuccess, promptBiometric, readBiometricCredentials]);
 
   const logout = useCallback(async () => {
+    // Fire-and-forget: notify server without blocking UI
+    if (accessToken) {
+      logoutApi(accessToken);
+    }
     setStatus("unauthenticated");
     setUser(undefined);
     setAccessToken(undefined);
     pendingCredentialsRef.current = null;
     setShouldPromptBiometricEnrollment(false);
     await clearBiometricStorage();
-  }, [clearBiometricStorage]);
+  }, [accessToken, clearBiometricStorage]);
+
+  useEffect(() => {
+    // 401 from any report API call → drop session + redirect to login
+    setOnUnauthorized(() => {
+      logout();
+    });
+    return () => setOnUnauthorized(null);
+  }, [logout]);
 
   const dismissBiometricEnrollmentPrompt = useCallback(() => {
     setShouldPromptBiometricEnrollment(false);

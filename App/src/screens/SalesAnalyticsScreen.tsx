@@ -1,275 +1,419 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import type { TabScreenNavigationProp } from "../navigation/types";
 import { Dropdown } from "react-native-element-dropdown";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { MiniBarChart, ProgressRing } from "../components/stitch/Charts";
-import { forecastSeries } from "../data/stitchData";
-import { eventSalesTrends } from "../data/eventSalesTrends";
-import { formatCurrencyARS, formatInteger, formatPercent } from "../lib/formatters";
+import { MiniBarChart } from "../components/stitch/Charts";
+import { formatCurrencyARS, formatDateLong, formatInteger } from "../lib/formatters";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
-import type { Event } from "../lib/types";
+import { fetchHistoryFor } from "../lib/apiClient";
+import type { Event, EventFunction } from "../lib/types";
+import type { HistoryDay } from "../lib/reportApi";
 
-const allEventsOption = { key: "all", value: "Todos los eventos activos" };
-
-const formatEventDate = (dateISO: string) => {
-  const date = new Date(dateISO);
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}`;
-};
-
-const formatTrendLabel = (dateISO: string) => {
-  const date = new Date(dateISO);
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}`;
-};
+const allEventsOption = { key: "all", value: "Todos los eventos" };
 
 const getEventRevenue = (event: Event) => event.grossRevenueARS ?? event.ticketsSold * event.ticketPriceARS;
 
+const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+const toISOKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const buildLastNDays = (rows: HistoryDay[], n: number): HistoryDay[] => {
+  const map = new Map<string, HistoryDay>();
+  for (const row of rows) {
+    const d = parseDayDate(row.day_date);
+    if (d) map.set(toISOKey(d), row);
+  }
+  const result: HistoryDay[] = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const key = toISOKey(d);
+    result.push(
+      map.get(key) ?? {
+        day_date: key,
+        day_formatted: key,
+        sold_tickets: 0,
+        sold_guest: 0,
+        total_tickets: 0,
+        total_net: 0,
+      },
+    );
+  }
+  return result;
+};
+
+// Handles YYYY-MM-DD and DD/MM/YYYY without relying on Date string parsing
+const parseDayDate = (s: string): Date | null => {
+  if (!s) return null;
+  // Matches YYYY-MM-DD with or without trailing time (e.g. "2026-04-08 00:00:00")
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
+  const dmySep = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmySep) return new Date(+dmySep[3], +dmySep[2] - 1, +dmySep[1]);
+  return null;
+};
+
+const statusLabel = (status: string) => {
+  if (status === "sold_out") return "AGOTADO";
+  if (status === "finished") return "FINALIZADO";
+  return "EN VENTA";
+};
+
+const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => {
+  if (status === "sold_out") return palette.warning;
+  if (status === "finished") return palette.subtext;
+  return palette.primary;
+};
+
 const SalesAnalyticsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<TabScreenNavigationProp>();
   const { theme, events, loadEvents } = useAppState();
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
+
   const [selectedEventId, setSelectedEventId] = useState("all");
+  const [selectedBarIndex, setSelectedBarIndex] = useState<number | undefined>(undefined);
+  const [showAllFunctions, setShowAllFunctions] = useState(false);
+  const [weekHistory, setWeekHistory] = useState<HistoryDay[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    if (events.status === "idle") {
-      loadEvents();
-    }
-  }, [events.status, loadEvents]);
+    if (events.status === "idle" && accessToken) loadEvents(accessToken);
+  }, [events.status, loadEvents, accessToken]);
+
+  // Fetch last 7 days of history when event selection changes
+  useEffect(() => {
+    if (!accessToken) return;
+    setHistoryLoading(true);
+    setSelectedBarIndex(undefined);
+    fetchHistoryFor(accessToken, undefined)
+      .then((result) => {
+        setWeekHistory(buildLastNDays(result.rows, 7));
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [accessToken, selectedEventId]);
 
   const activeEvents = useMemo(
     () => events.data.filter((event) => event.status !== "finished"),
-    [events.data]
+    [events.data],
   );
 
   useEffect(() => {
-    if (selectedEventId !== "all" && !activeEvents.some((event) => event.id === selectedEventId)) {
+    if (activeEvents.length === 1) {
+      setSelectedEventId(activeEvents[0].id);
+    } else if (selectedEventId !== "all" && !activeEvents.some((e) => e.id === selectedEventId)) {
       setSelectedEventId("all");
     }
   }, [activeEvents, selectedEventId]);
 
   const selectedEvent = useMemo(
-    () => activeEvents.find((event) => event.id === selectedEventId) ?? null,
-    [activeEvents, selectedEventId]
+    () => activeEvents.find((e) => e.id === selectedEventId) ?? null,
+    [activeEvents, selectedEventId],
   );
 
   const visibleEvents = useMemo(
     () => (selectedEvent ? [selectedEvent] : activeEvents),
-    [activeEvents, selectedEvent]
+    [activeEvents, selectedEvent],
   );
 
   const eventOptions = useMemo(
-    () => [
-      allEventsOption,
-      ...activeEvents.map((event) => ({
-        key: event.id,
-        value: event.name,
-      })),
-    ],
-    [activeEvents]
+    () => [allEventsOption, ...activeEvents.map((e) => ({ key: e.id, value: e.name }))],
+    [activeEvents],
   );
 
   const totalRevenue = useMemo(
-    () => visibleEvents.reduce((total, event) => total + getEventRevenue(event), 0),
-    [visibleEvents]
+    () => visibleEvents.reduce((sum, e) => sum + getEventRevenue(e), 0),
+    [visibleEvents],
   );
   const totalTicketsSold = useMemo(
-    () => visibleEvents.reduce((total, event) => total + event.ticketsSold, 0),
-    [visibleEvents]
+    () => visibleEvents.reduce((sum, e) => sum + e.ticketsSold, 0),
+    [visibleEvents],
   );
-  const totalCapacity = useMemo(
-    () => visibleEvents.reduce((total, event) => total + event.ticketsAvailable, 0),
-    [visibleEvents]
-  );
-  const occupancy = totalCapacity === 0 ? 0 : (totalTicketsSold / totalCapacity) * 100;
-  const averageVelocity =
-    visibleEvents.length === 0
-      ? 0
-      : visibleEvents.reduce((total, event) => total + (event.velocity ?? 0), 0) / visibleEvents.length;
-  const averageCheckIn =
-    visibleEvents.length === 0
-      ? 0
-      : visibleEvents.reduce((total, event) => total + (event.checkInProgress ?? 0), 0) / visibleEvents.length;
-  const revenueTrend = useMemo(() => {
-    const visibleEventIds = new Set(visibleEvents.map((event) => event.id));
-    const filteredTrend = eventSalesTrends.filter((point) => visibleEventIds.has(point.eventId));
 
-    const groupedByDate = filteredTrend.reduce<Record<string, number>>((acc, point) => {
-      acc[point.dateISO] = (acc[point.dateISO] ?? 0) + point.revenueARS;
-      return acc;
-    }, {});
-
-    return Object.entries(groupedByDate)
-      .sort(([left], [right]) => new Date(left).getTime() - new Date(right).getTime())
-      .slice(-6)
-      .map(([dateISO, revenueARS]) => ({
-        label: formatTrendLabel(dateISO),
-        value: Math.max(1, Math.round(revenueARS / 1000000)),
-      }));
-  }, [visibleEvents]);
-  const availability = Math.max(0, 100 - occupancy);
-  const ticketMix = useMemo(
-    () => [
-      { label: "Vendido", value: Math.round(occupancy) },
-      { label: "Disponible", value: Math.round(availability) },
-      { label: "Check-in", value: Math.round(averageCheckIn) },
-      { label: "Velocidad", value: Math.round(averageVelocity) },
-    ],
-    [availability, averageCheckIn, averageVelocity, occupancy]
+  // Weekly bar chart data (last 7 days from history)
+  const weeklyTrend = useMemo(
+    () =>
+      weekHistory.map((day) => {
+        const d = parseDayDate(day.day_date);
+        const label = d ? `${DAY_NAMES[d.getDay()]}\n${d.getDate()}` : day.day_formatted.slice(0, 5);
+        return {
+          label,
+          value: day.total_net,
+          valueLabel: formatCurrencyARS(day.total_net),
+        };
+      }),
+    [weekHistory],
   );
-  const analyticsSubtitle = selectedEvent
-    ? `${selectedEvent.venue} · ${selectedEvent.city} · ${formatEventDate(selectedEvent.dateISO)}`
-    : "Rendimiento comercial consolidado";
-  const pillLabel = selectedEvent ? "Vista por evento" : `${activeEvents.length} eventos incluidos`;
-  const trendTitle = "Tendencia real";
-  const trendDescription = selectedEvent
-    ? "Ingresos reales por fecha del evento seleccionado"
-    : "Ingresos reales por fecha del consolidado activo";
-  const mixDescription = selectedEvent
-    ? "Estado comercial del evento seleccionado"
-    : "Distribucion del inventario comercial activo";
+
+  // Functions of the selected event (sorted by date)
+  const selectedFunctions: EventFunction[] = useMemo(() => {
+    if (!selectedEvent?.functions) return [];
+    return [...selectedEvent.functions].sort(
+      (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
+    );
+  }, [selectedEvent]);
+
+  const visibleFunctions = showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5);
+  const hiddenCount = selectedFunctions.length - 5;
+
+  const pillLabel = selectedEvent
+    ? `${selectedFunctions.length} función${selectedFunctions.length !== 1 ? "es" : ""}`
+    : `${activeEvents.length} evento${activeEvents.length !== 1 ? "s" : ""} incluido${activeEvents.length !== 1 ? "s" : ""}`;
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 34 }}>
         <AppHeader
           title="Ventas"
-          subtitle={analyticsSubtitle}
+          subtitle={selectedEvent ? selectedEvent.name : "Rendimiento comercial consolidado"}
           pillLabel={pillLabel}
-          onAvatarPress={() => navigation.navigate("Profile" as never)}
+          onAvatarPress={() => navigation.navigate("Profile")}
           avatarInitials={user?.initials}
         />
 
         <View style={{ paddingHorizontal: 20, gap: 14 }}>
-          <SurfaceCard
-            style={{
-              paddingVertical: 16,
-              backgroundColor: theme === "dark" ? palette.surface : "#f3f7ff",
-              borderColor: theme === "dark" ? palette.border : "#cdddff",
-              borderWidth: 1,
-            }}
-          >
-            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 }}>
-              Evento
-            </Text>
-            <Text style={{ color: palette.text, fontSize: 22, fontWeight: "800", marginTop: 6 }}>
-              {selectedEvent?.name ?? "Todos los eventos activos"}
-            </Text>
-            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-              Cambia el foco del panel para revisar la data especifica de cada evento activo.
-            </Text>
-            <Dropdown
-              data={eventOptions}
-              value={selectedEventId}
-              labelField="value"
-              valueField="key"
-              onChange={(item) => setSelectedEventId(String(item.key))}
-              style={{
-                marginTop: 14,
-                minHeight: 56,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: theme === "dark" ? palette.border : "#b8cbff",
-                backgroundColor: palette.surface,
-                paddingHorizontal: 16,
-              }}
-              containerStyle={{
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-                overflow: "hidden",
-              }}
-              placeholderStyle={{ color: palette.subtext, fontSize: 15 }}
-              selectedTextStyle={{ color: palette.text, fontSize: 15, fontWeight: "700" }}
-              itemTextStyle={{ color: palette.text, fontSize: 15 }}
-              activeColor={theme === "dark" ? palette.surfaceMuted : palette.primarySoft}
-              iconColor={palette.primary}
-              maxHeight={320}
-              placeholder="Selecciona un evento"
-            />
-          </SurfaceCard>
-
+          {/* Hero KPI */}
           <SurfaceCard tone="hero">
-            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>Ingresos</Text>
+            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
+              {selectedEvent ? "Total recaudado — todas las funciones" : "Total recaudado"}
+            </Text>
             <Text style={{ color: palette.text, fontSize: 36, fontWeight: "800", marginTop: 8 }}>
               {formatCurrencyARS(totalRevenue)}
             </Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}>
-              {selectedEvent ? "Revenue total del evento seleccionado" : "Consolidado comercial de los eventos activos"}
+              {formatInteger(totalTicketsSold)} entradas vendidas
             </Text>
           </SurfaceCard>
 
-          <View style={{ flexDirection: "row", gap: 14 }}>
-            <SurfaceCard style={{ flex: 1 }}>
-              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
-              <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                {formatInteger(totalTicketsSold)}
+          {/* Dropdown selector — solo si hay más de 1 evento activo */}
+          {activeEvents.length > 1 && (
+            <SurfaceCard style={{ paddingVertical: 16, borderWidth: 1 }}>
+              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                Evento
               </Text>
-              <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
-                {selectedEvent ? "Total vendido del evento" : "Total acumulado del panel visible"}
-              </Text>
-            </SurfaceCard>
-            <SurfaceCard style={{ flex: 1 }}>
-              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Ocupacion total</Text>
-              <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                {formatPercent(occupancy)}
-              </Text>
-              <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
-                {selectedEvent ? "Venta sobre capacidad del evento" : "Porcentaje vendido sobre capacidad activa"}
-              </Text>
-            </SurfaceCard>
-          </View>
-
-          <SurfaceCard>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <View>
-                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{trendTitle}</Text>
-                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
-                  {trendDescription}
-                </Text>
-              </View>
-              <View
-                style={{
-                  backgroundColor: selectedEvent ? palette.primarySoft : palette.surfaceMuted,
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
+              <Dropdown
+                data={eventOptions}
+                value={selectedEventId}
+                labelField="value"
+                valueField="key"
+                onChange={(item) => {
+                  setSelectedEventId(String(item.key));
+                  setShowAllFunctions(false);
                 }}
-              >
-                <Text style={{ color: selectedEvent ? palette.primary : palette.subtext, fontSize: 12, fontWeight: "700" }}>
-                  {selectedEvent ? "Ultimos 6 dias" : "Vista consolidada"}
-                </Text>
-              </View>
-            </View>
-            <MiniBarChart data={revenueTrend.length > 0 ? revenueTrend : forecastSeries} highlightIndex={revenueTrend.length - 1} />
+                style={{
+                  marginTop: 14,
+                  minHeight: 56,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: theme === "dark" ? palette.border : palette.primarySoft,
+                  backgroundColor: palette.surface,
+                  paddingHorizontal: 16,
+                }}
+                containerStyle={{
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: palette.border,
+                  backgroundColor: palette.surface,
+                  overflow: "hidden",
+                }}
+                placeholderStyle={{ color: palette.subtext, fontSize: 15 }}
+                selectedTextStyle={{ color: palette.text, fontSize: 15, fontWeight: "700" }}
+                itemTextStyle={{ color: palette.text, fontSize: 15 }}
+                activeColor={theme === "dark" ? palette.surfaceMuted : palette.primarySoft}
+                iconColor={palette.primary}
+                maxHeight={320}
+                placeholder="Seleccioná un evento"
+              />
+            </SurfaceCard>
+          )}
+
+          {/* Entradas vendidas */}
+          <SurfaceCard>
+            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
+            <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
+              {formatInteger(totalTicketsSold)}
+            </Text>
+            <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
+              {selectedEvent
+                ? `Suma de ${selectedFunctions.length} funciones`
+                : `Suma de ${activeEvents.length} eventos activos`}
+            </Text>
           </SurfaceCard>
 
+          {/* Weekly sales chart */}
           <SurfaceCard>
-            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Mix de tickets</Text>
+            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Ingresos semanales</Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
-              {mixDescription}
+              Últimos 7 días · tocá una barra para ver el monto
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18 }}>
-              <ProgressRing value={occupancy} size={92} />
-              <View style={{ marginLeft: 18, flex: 1, gap: 10 }}>
-                {ticketMix.map((item) => (
-                  <View key={item.label} style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text style={{ color: palette.subtext, fontSize: 13 }}>{item.label}</Text>
-                    <Text style={{ color: palette.text, fontWeight: "700" }}>{item.value}%</Text>
-                  </View>
+            {historyLoading ? (
+              <ActivityIndicator color={palette.primary} style={{ marginTop: 24, marginBottom: 8 }} />
+            ) : weeklyTrend.length > 0 ? (
+              <>
+                <MiniBarChart
+                  data={weeklyTrend}
+                  selectedIndex={selectedBarIndex}
+                  onBarPress={(i) => setSelectedBarIndex((prev) => (prev === i ? undefined : i))}
+                  barAreaHeight={120}
+                />
+                {selectedBarIndex != null && weekHistory[selectedBarIndex] && (() => {
+                  const row = weekHistory[selectedBarIndex];
+                  const d = parseDayDate(row.day_date);
+                  const dateLabel = d
+                    ? new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "short" }).format(d)
+                    : row.day_formatted;
+                  return (
+                    <View
+                      style={{
+                        marginTop: 14,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        backgroundColor: palette.primarySoft,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                      }}
+                    >
+                      <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
+                        {dateLabel}
+                      </Text>
+                      <Text style={{ color: palette.primary, fontSize: 15, fontWeight: "800" }}>
+                        {formatCurrencyARS(row.total_net)}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </>
+            ) : (
+              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 16 }}>
+                Sin datos para los últimos 7 días.
+              </Text>
+            )}
+          </SurfaceCard>
+
+          {/* When a specific event is selected: list its functions */}
+          {selectedEvent ? (
+            <SurfaceCard>
+              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Funciones</Text>
+              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                Tocá una función para ver su detalle
+              </Text>
+              <View style={{ marginTop: 16, gap: 8 }}>
+                {visibleFunctions.map((fn) => (
+                  <Pressable
+                    key={fn.id}
+                    onPress={() =>
+                      navigation.navigate("Events", {
+                        screen: "FunctionDetail",
+                        params: { functionId: fn.id },
+                      })
+                    }
+                    style={({ pressed }) => ({
+                      backgroundColor: palette.surfaceMuted,
+                      borderRadius: 16,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                  >
+                    {/* Row 1: date + status badge + chevron */}
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700", flex: 1 }}>
+                        {formatDateLong(fn.dateISO)}
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: statusColor(fn.status, palette),
+                          borderRadius: 999,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          marginLeft: 8,
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
+                          {statusLabel(fn.status)}
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 6 }} />
+                    </View>
+                    {/* Row 2: tickets + revenue */}
+                    <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>
+                      {formatInteger(fn.ticketsSold)} entradas · {formatCurrencyARS(fn.grossRevenueARS)}
+                    </Text>
+                  </Pressable>
                 ))}
               </View>
-            </View>
-          </SurfaceCard>
+
+              {/* Ver todo / Ocultar */}
+              {hiddenCount > 0 && (
+                <Pressable
+                  onPress={() => setShowAllFunctions((v) => !v)}
+                  style={{ marginTop: 10, alignItems: "center", paddingVertical: 10 }}
+                >
+                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
+                    {showAllFunctions ? "Ver menos" : `Ver todas (${hiddenCount} más)`}
+                  </Text>
+                </Pressable>
+              )}
+            </SurfaceCard>
+          ) : (
+            /* When all events: ranking by revenue */
+            <SurfaceCard>
+              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Ranking de eventos</Text>
+              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                Ordenados por ingresos totales
+              </Text>
+              <View style={{ marginTop: 16, gap: 8 }}>
+                {[...visibleEvents]
+                  .sort((a, b) => getEventRevenue(b) - getEventRevenue(a))
+                  .map((event, index) => (
+                    <Pressable
+                      key={event.id}
+                      onPress={() =>
+                        navigation.navigate("Events", {
+                          screen: "EventDetail",
+                          params: { eventId: event.id },
+                        })
+                      }
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: palette.surfaceMuted,
+                        borderRadius: 16,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        opacity: pressed ? 0.75 : 1,
+                      })}
+                    >
+                      <Text style={{ color: palette.subtext, fontSize: 13, fontWeight: "800", width: 24 }}>
+                        #{index + 1}
+                      </Text>
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }} numberOfLines={1}>
+                          {event.name}
+                        </Text>
+                        <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 2 }}>
+                          {event.functions?.length ?? 1} función{(event.functions?.length ?? 1) !== 1 ? "es" : ""} · {formatInteger(event.ticketsSold)} entradas
+                        </Text>
+                      </View>
+                      <Text style={{ color: palette.text, fontSize: 14, fontWeight: "800" }}>
+                        {formatCurrencyARS(getEventRevenue(event))}
+                      </Text>
+                    </Pressable>
+                  ))}
+              </View>
+            </SurfaceCard>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

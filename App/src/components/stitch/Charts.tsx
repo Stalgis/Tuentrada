@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { useAppState } from "../../store/appState";
 import { getPalette } from "../../lib/theme";
@@ -7,33 +7,58 @@ import { getPalette } from "../../lib/theme";
 export type BarDatum = {
   label: string;
   value: number;
+  /** Label shown above the bar when selected */
+  valueLabel?: string;
 };
 
-export const MiniBarChart = ({ data, highlightIndex }: { data: BarDatum[]; highlightIndex?: number }) => {
+export const MiniBarChart = ({
+  data,
+  highlightIndex,
+  selectedIndex,
+  onBarPress,
+  barAreaHeight = 110,
+}: {
+  data: BarDatum[];
+  highlightIndex?: number;
+  selectedIndex?: number;
+  onBarPress?: (index: number) => void;
+  barAreaHeight?: number;
+}) => {
   const { theme } = useAppState();
   const palette = getPalette(theme);
-  const max = Math.max(...data.map((item) => item.value), 1);
+  const max = Math.max(...data.map((item) => item.value), 0);
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, marginTop: 10 }}>
-      {data.map((item, index) => (
-        <View key={item.label} style={{ alignItems: "center", flex: 1 }}>
-          <View
-            style={{
-              width: "100%",
-              height: Math.max(18, (item.value / max) * 96),
-              borderRadius: 14,
-              backgroundColor:
-                highlightIndex === index
-                  ? palette.primary
-                  : theme === "dark"
-                    ? palette.surfaceMuted
-                    : palette.primarySoft,
-            }}
-          />
-          <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 8 }}>{item.label}</Text>
-        </View>
-      ))}
+    <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
+      {data.map((item, index) => {
+        const isActive = selectedIndex === index || (selectedIndex == null && highlightIndex === index);
+        return (
+          <Pressable
+            key={`${index}-${item.label}`}
+            onPress={() => onBarPress?.(index)}
+            style={{ flex: 1, alignItems: "center" }}
+          >
+            {/* bar area — fixed height so all bars align at bottom */}
+            <View style={{ width: "100%", height: barAreaHeight, justifyContent: "flex-end" }}>
+              <View
+                style={{
+                  width: "100%",
+                  height: max === 0 || item.value <= 0 ? 4 : Math.max(16, (item.value / max) * barAreaHeight),
+                  borderRadius: 12,
+                  backgroundColor: isActive
+                    ? palette.primary
+                    : theme === "dark"
+                      ? palette.surfaceMuted
+                      : palette.primarySoft,
+                }}
+              />
+            </View>
+            <Text style={{ color: palette.subtext, fontSize: 10, marginTop: 6, textAlign: "center" }}>
+              {item.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 };

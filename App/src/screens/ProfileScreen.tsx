@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Platform, Pressable, ScrollView, Text, ToastAndroid, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,14 +10,6 @@ import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { useTranslation } from "../hooks/useTranslation";
 import { getPalette } from "../lib/theme";
-
-const showToast = (message: string) => {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(message, ToastAndroid.SHORT);
-  } else {
-    Alert.alert(message);
-  }
-};
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -31,8 +23,18 @@ const ProfileScreen = () => {
   const palette = getPalette(theme);
 
   const handleSignOut = () => {
-    showToast(t('signOutToast'));
-    logout();
+    Alert.alert(
+      t('signOutConfirmTitle'),
+      t('signOutConfirmMessage'),
+      [
+        { text: t('signOutConfirmCancel'), style: 'cancel' },
+        {
+          text: t('signOut'),
+          style: 'destructive',
+          onPress: () => { logout(); },
+        },
+      ],
+    );
   };
 
   return (
@@ -48,7 +50,7 @@ const ProfileScreen = () => {
           <SurfaceCard>
             <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Apariencia</Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-              Cambia entre modo claro, oscuro o sistema.
+              Cambiá entre modo claro, oscuro o sistema.
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
               {[
