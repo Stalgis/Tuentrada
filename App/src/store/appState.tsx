@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import type { PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
 import { fetchEvents, invalidateEventsCache } from '../lib/apiClient';
-import type { CurrencyCode, Event, EventMetrics, Language } from '../lib/types';
+import type { Event, Language } from '../lib/types';
 import type { ThemeName, ThemePreference } from '../lib/theme';
 
 type EventsStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -15,7 +15,6 @@ type EventsState = {
 
 type AppState = {
   language: Language;
-  currency: CurrencyCode;
   theme: ThemeName;
   themePreference: ThemePreference;
   events: EventsState;
@@ -29,7 +28,6 @@ const AppStateContext = createContext<AppState | undefined>(undefined);
 
 export const AppStateProvider = ({ children }: PropsWithChildren) => {
   const [language, setLanguage] = useState<Language>('es');
-  const currency: CurrencyCode = 'ARS';
   const [themePreference, setTheme] = useState<ThemePreference>('system');
   const systemScheme = useColorScheme();
   const theme: ThemeName =
@@ -76,7 +74,6 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   const value = useMemo<AppState>(
     () => ({
       language,
-      currency,
       theme,
       themePreference,
       events,
@@ -85,7 +82,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
       loadEvents,
       clearEventsCache,
     }),
-    [language, currency, theme, themePreference, events, loadEvents, clearEventsCache],
+    [language, theme, themePreference, events, loadEvents, clearEventsCache],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
@@ -99,16 +96,3 @@ export const useAppState = () => {
   return context;
 };
 
-export const useEventMetrics = (): EventMetrics => {
-  const {
-    events: { data },
-  } = useAppState();
-
-  const safeData = data ?? [];
-  return useMemo(() => {
-    const upcoming = safeData.filter((event) => new Date(event.dateISO).getTime() > Date.now()).length;
-    const ticketsSold = safeData.reduce((acc, event) => acc + event.ticketsSold, 0);
-    const totalRevenueARS = safeData.reduce((acc, event) => acc + event.ticketsSold * event.ticketPriceARS, 0);
-    return { upcoming, ticketsSold, totalRevenueARS };
-  }, [safeData]);
-};

@@ -1,10 +1,3 @@
-export const formatCompactNumber = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    compactDisplay: "short",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
-
 export const formatInteger = (value: number) =>
   new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 0,
