@@ -1,4 +1,5 @@
 import type { Event, EventStatus } from "./types";
+import { env } from "./env";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
@@ -28,18 +29,14 @@ export const setOnUnauthorized = (cb: (() => void) | null): void => {
 
 // ─── Shared fetch helper ──────────────────────────────────────────────────────
 
-const BASE_URL = (process.env.EXPO_PUBLIC_BASE_URL ?? "").trim();
+const BASE_URL = env.baseUrl;
 
-const makeHeaders = (token: string): Record<string, string> => {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  const apiKey = (process.env.EXPO_PUBLIC_API_KEY ?? "").trim();
-  if (apiKey) headers["x-api-key"] = apiKey;
-  return headers;
-};
+const makeHeaders = (token: string): Record<string, string> => ({
+  "Content-Type": "application/json",
+  Accept: "application/json",
+  Authorization: `Bearer ${token}`,
+  "x-api-key": env.apiKey,
+});
 
 export type ReportParams = {
   id?: string;

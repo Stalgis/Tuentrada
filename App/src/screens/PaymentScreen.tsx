@@ -46,6 +46,7 @@ const PaymentScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [showAllFunctions, setShowAllFunctions] = useState(false);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) loadEvents(accessToken);
@@ -90,6 +91,7 @@ const PaymentScreen = () => {
     setLoading(true);
     setError(null);
     setShowAll(false);
+    setShowAllFunctions(false);
     fetchPaymentsForEvent(accessToken, apiId ?? "", period)
       .then(setRows)
       .catch((err) => {
@@ -343,7 +345,7 @@ const PaymentScreen = () => {
                 Tocá una función para ver su desglose
               </Text>
               <View style={{ marginTop: 14, gap: 10 }}>
-                {selectedFunctions.map((fn) => (
+                {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => (
                   <Pressable
                     key={fn.id}
                     onPress={() => setSelectedFunctionId(fn.id)}
@@ -372,6 +374,16 @@ const PaymentScreen = () => {
                   </Pressable>
                 ))}
               </View>
+              {selectedFunctions.length > 5 && (
+                <Pressable
+                  onPress={() => setShowAllFunctions((s) => !s)}
+                  style={{ marginTop: 14, alignSelf: "flex-start" }}
+                >
+                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
+                    {showAllFunctions ? "Ver menos" : `Ver todas (${selectedFunctions.length - 5} más)`}
+                  </Text>
+                </Pressable>
+              )}
             </SurfaceCard>
           )}
         </View>

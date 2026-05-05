@@ -1,19 +1,22 @@
 import React, { useMemo, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
-  Image,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import Button from "../components/UI/Button";
+import SurfaceCard from "../components/stitch/SurfaceCard";
 import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../store/auth";
+import { useAppState } from "../store/appState";
+import { getPalette } from "../lib/theme";
+import { radius, shadow, spacing, typography } from "../lib/design";
 
 const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
 
@@ -21,6 +24,8 @@ const LoginScreen = () => {
   const { login, loginWithBiometric, loading, biometricEnabled } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { theme } = useAppState();
+  const palette = getPalette(theme);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,36 +35,18 @@ const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const emailError = useMemo(() => {
-    if (!emailTouched) {
-      return null;
-    }
-
-    if (!email.trim()) {
-      return t("emailLabel");
-    }
-
-    if (!isValidEmail(email)) {
-      return "Ingresá un email válido.";
-    }
-
+    if (!emailTouched) return null;
+    if (!email.trim()) return "Ingresá tu email.";
+    if (!isValidEmail(email)) return "Ingresá un email válido.";
     return null;
-  }, [email, emailTouched, t]);
+  }, [email, emailTouched]);
 
   const passwordError = useMemo(() => {
-    if (!passwordTouched) {
-      return null;
-    }
-
-    if (!password.trim()) {
-      return t("passwordLabel");
-    }
-
-    if (password.trim().length < 6) {
-      return "La contraseña debe tener al menos 6 caracteres.";
-    }
-
+    if (!passwordTouched) return null;
+    if (!password.trim()) return "Ingresá tu contraseña.";
+    if (password.trim().length < 6) return "La contraseña debe tener al menos 6 caracteres.";
     return null;
-  }, [password, passwordTouched, t]);
+  }, [password, passwordTouched]);
 
   const handleSubmit = async () => {
     setEmailTouched(true);
@@ -70,7 +57,6 @@ const LoginScreen = () => {
       setError(t("loginMissingFields"));
       return;
     }
-
     if (!isValidEmail(email)) {
       setError("Revisá el email antes de continuar.");
       return;
@@ -85,7 +71,6 @@ const LoginScreen = () => {
 
   const handleBiometricLogin = async () => {
     setError(null);
-
     try {
       await loginWithBiometric();
     } catch (err) {
@@ -93,75 +78,122 @@ const LoginScreen = () => {
     }
   };
 
-  const emailFieldClasses = emailError
-    ? "border-rose-400 bg-rose-50"
-    : "border-slate-200 bg-white";
-  const passwordFieldClasses = passwordError
-    ? "border-rose-400 bg-rose-50"
-    : "border-slate-200 bg-white";
+  const inputBorder = (hasError: boolean) =>
+    hasError ? palette.danger : palette.hairline;
 
   return (
-    <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-[#F8FAFC] dark:bg-background-dark">
+    <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: palette.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing["2xl"] }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View className="flex-1">
+          <View>
             <View
-              className="relative h-[320px] overflow-hidden rounded-b-[36px] bg-[#111827] px-6"
-              style={{ paddingTop: insets.top + 12 }}
+              style={{
+                height: 300,
+                backgroundColor: palette.primary,
+                borderBottomLeftRadius: radius.xl + 8,
+                borderBottomRightRadius: radius.xl + 8,
+                paddingTop: insets.top + spacing.md,
+                paddingHorizontal: spacing.xl,
+                overflow: "hidden",
+              }}
             >
-              <View className="absolute -top-12 -right-10 h-40 w-40 rounded-full bg-[#E11D48]/20" />
-              <View className="absolute top-20 -left-12 h-32 w-32 rounded-full bg-[#8B5CF6]/20" />
-              <View className="absolute bottom-4 right-8 h-24 w-24 rounded-full bg-white/5" />
-
-              <View className="items-center">
+              <View
+                style={{
+                  position: "absolute",
+                  top: -60,
+                  right: -40,
+                  width: 200,
+                  height: 200,
+                  borderRadius: 100,
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  top: 80,
+                  left: -50,
+                  width: 160,
+                  height: 160,
+                  borderRadius: 80,
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                }}
+              />
+              <View style={{ alignItems: "center" }}>
                 <Image
                   source={require("../assets/images/logos-tuentrada/tuentrada-blanco.png")}
                   resizeMode="contain"
                   style={{ width: 210, height: 58 }}
                 />
-
-                <Text className="mt-8 text-[32px] font-extrabold tracking-tight text-white">
+                <Text
+                  style={{
+                    ...typography.hero,
+                    color: "#ffffff",
+                    marginTop: spacing.xl + spacing.sm,
+                    textAlign: "center",
+                  }}
+                >
                   {t("loginTitle")}
                 </Text>
-
-                <Text className="mt-3 max-w-[300px] text-center text-sm leading-5 text-white/70">
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "rgba(255,255,255,0.78)",
+                    marginTop: spacing.md,
+                    textAlign: "center",
+                    maxWidth: 300,
+                    lineHeight: 20,
+                  }}
+                >
                   {t("loginSubtitle")}
                 </Text>
               </View>
             </View>
 
-            <View className="-mt-14 flex-1 px-5">
-              <View className="rounded-[30px] border border-slate-200 bg-white px-5 py-6 shadow-xl dark:border-border-dark dark:bg-card-dark">
-                <Text className="text-lg font-semibold text-[#111827] dark:text-text-dark">
-                  Acceso
-                </Text>
-                <Text className="mt-1 text-sm text-slate-500 dark:text-subtext-dark">
+            <View style={{ marginTop: -56, paddingHorizontal: spacing.lg }}>
+              <SurfaceCard style={{ ...shadow.card, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl }}>
+                <Text style={{ ...typography.title, color: palette.text }}>Acceso</Text>
+                <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
                   Ingresá con tu cuenta para continuar
                 </Text>
 
-                <View className="mt-6">
-                  <Text className="mb-2 ml-1 text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-subtext-dark">
+                <View style={{ marginTop: spacing.xl }}>
+                  <Text
+                    style={{
+                      ...typography.micro,
+                      color: palette.subtext,
+                      marginBottom: spacing.sm,
+                      letterSpacing: 1,
+                    }}
+                  >
                     {t("emailLabel")}
                   </Text>
                   <View
-                    className={`min-h-14 flex-row items-center rounded-2xl border px-4 ${emailFieldClasses} dark:border-border-dark dark:bg-background-dark`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: inputBorder(!!emailError),
+                      backgroundColor: palette.surfaceMuted,
+                      paddingHorizontal: spacing.base,
+                      minHeight: 56,
+                    }}
                   >
-                    <Feather name="mail" size={18} color={emailError ? "#e11d48" : "#64748B"} />
+                    <Feather name="mail" size={18} color={emailError ? palette.danger : palette.subtext} />
                     <TextInput
                       value={email}
                       onChangeText={(value) => {
                         setEmail(value);
-                        if (error) {
-                          setError(null);
-                        }
+                        if (error) setError(null);
                       }}
                       onBlur={() => setEmailTouched(true)}
                       autoCapitalize="none"
@@ -169,90 +201,153 @@ const LoginScreen = () => {
                       keyboardType="email-address"
                       textContentType="emailAddress"
                       placeholder="cliente@tuentrada.com"
-                      placeholderTextColor="#94A3B8"
-                      className="ml-3 flex-1 text-base text-[#0F172A] dark:text-text-dark"
-                      style={{ height: 56, paddingVertical: 0 }}
+                      placeholderTextColor={palette.subtext}
+                      style={{
+                        marginLeft: spacing.md,
+                        flex: 1,
+                        fontSize: 15,
+                        color: palette.text,
+                        paddingVertical: 0,
+                        height: 56,
+                      }}
                     />
                   </View>
                   {emailError ? (
-                    <Text className="mt-2 ml-1 text-xs font-medium text-rose-500">
-                      {emailError === t("emailLabel") ? "Ingresá tu email." : emailError}
+                    <Text style={{ marginTop: spacing.sm, fontSize: 12, fontWeight: "600", color: palette.danger }}>
+                      {emailError}
                     </Text>
                   ) : null}
                 </View>
 
-                <View className="mt-4">
-                  <Text className="mb-2 ml-1 text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-subtext-dark">
+                <View style={{ marginTop: spacing.base }}>
+                  <Text
+                    style={{
+                      ...typography.micro,
+                      color: palette.subtext,
+                      marginBottom: spacing.sm,
+                      letterSpacing: 1,
+                    }}
+                  >
                     {t("passwordLabel")}
                   </Text>
                   <View
-                    className={`min-h-14 flex-row items-center rounded-2xl border px-4 ${passwordFieldClasses} dark:border-border-dark dark:bg-background-dark`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: inputBorder(!!passwordError),
+                      backgroundColor: palette.surfaceMuted,
+                      paddingHorizontal: spacing.base,
+                      minHeight: 56,
+                    }}
                   >
-                    <Feather name="lock" size={18} color={passwordError ? "#e11d48" : "#64748B"} />
+                    <Feather name="lock" size={18} color={passwordError ? palette.danger : palette.subtext} />
                     <TextInput
                       value={password}
                       onChangeText={(value) => {
                         setPassword(value);
-                        if (error) {
-                          setError(null);
-                        }
+                        if (error) setError(null);
                       }}
                       onBlur={() => setPasswordTouched(true)}
                       secureTextEntry={!showPassword}
                       textContentType="password"
                       placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
-                      className="ml-3 flex-1 text-base text-[#0F172A] dark:text-text-dark"
-                      style={{ height: 56, paddingVertical: 0 }}
+                      placeholderTextColor={palette.subtext}
+                      style={{
+                        marginLeft: spacing.md,
+                        flex: 1,
+                        fontSize: 15,
+                        color: palette.text,
+                        paddingVertical: 0,
+                        height: 56,
+                      }}
                     />
-                    <TouchableOpacity
+                    <Pressable
                       onPress={() => setShowPassword((prev) => !prev)}
                       accessibilityRole="button"
                       accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                      className="rounded-xl bg-slate-100 px-2 py-2"
+                      hitSlop={8}
+                      style={{
+                        borderRadius: radius.sm,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.sm,
+                      }}
                     >
                       <Feather
                         name={showPassword ? "eye-off" : "eye"}
                         size={18}
-                        color="#475569"
+                        color={palette.subtext}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   {passwordError ? (
-                    <Text className="mt-2 ml-1 text-xs font-medium text-rose-500">
-                      {passwordError === t("passwordLabel") ? "Ingresá tu contraseña." : passwordError}
+                    <Text style={{ marginTop: spacing.sm, fontSize: 12, fontWeight: "600", color: palette.danger }}>
+                      {passwordError}
                     </Text>
                   ) : null}
                 </View>
 
                 {error ? (
-                  <View className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-                    <Text className="text-sm font-medium text-rose-600">{error}</Text>
+                  <View
+                    style={{
+                      marginTop: spacing.lg,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: palette.danger,
+                      backgroundColor: palette.surfaceMuted,
+                      paddingHorizontal: spacing.base,
+                      paddingVertical: spacing.md,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: palette.danger }}>{error}</Text>
                   </View>
                 ) : null}
 
-                <Button
-                  label={loading ? "Verificando acceso..." : t("loginButton")}
-                  className="mt-6 min-h-14 rounded-2xl bg-primary-600"
+                <Pressable
                   onPress={handleSubmit}
-                  loading={loading}
-                />
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("loginButton")}
+                  style={{
+                    marginTop: spacing.xl,
+                    backgroundColor: palette.primary,
+                    borderRadius: radius.pill,
+                    paddingVertical: spacing.base,
+                    minHeight: 52,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  <Text style={{ color: "#ffffff", fontSize: 16, fontWeight: "800" }}>
+                    {loading ? "Verificando acceso..." : t("loginButton")}
+                  </Text>
+                </Pressable>
 
                 {biometricEnabled ? (
-                  <TouchableOpacity
-                    activeOpacity={0.85}
+                  <Pressable
                     onPress={handleBiometricLogin}
                     disabled={loading}
-                    className="mt-3 min-h-14 flex-row items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 dark:border-border-dark dark:bg-background-dark"
+                    style={{
+                      marginTop: spacing.md,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: radius.pill,
+                      borderWidth: 1,
+                      borderColor: palette.hairline,
+                      backgroundColor: palette.surfaceMuted,
+                      paddingVertical: spacing.base,
+                    }}
                   >
-                    <Feather name="shield" size={18} color="#0F172A" />
-                    <Text className="ml-2 text-sm font-semibold text-[#111827] dark:text-text-dark">
+                    <Feather name="shield" size={18} color={palette.text} />
+                    <Text style={{ marginLeft: spacing.sm, fontSize: 14, fontWeight: "700", color: palette.text }}>
                       Ingresar con biometría
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ) : null}
-
-              </View>
+              </SurfaceCard>
             </View>
           </View>
         </ScrollView>

@@ -133,6 +133,11 @@ const RootNavigator = () => {
             <Feather name="calendar" color={color} size={size} />
           ),
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate("Events", { screen: "EventsList" });
+          },
+        })}
       />
       <Tab.Screen
         name="Analytics"

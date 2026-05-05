@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
@@ -51,6 +51,7 @@ const EventDetailScreen = () => {
 
   const onSaleCount = functions.filter((f) => f.status === "on_sale").length;
   const finishedCount = functions.filter((f) => f.status === "finished").length;
+  const [showAllFunctions, setShowAllFunctions] = useState(false);
 
   if (!event) {
     return (
@@ -66,7 +67,7 @@ const EventDetailScreen = () => {
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
       <FlatList
-        data={functions}
+        data={showAllFunctions ? functions : functions.slice(0, 5)}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -127,6 +128,16 @@ const EventDetailScreen = () => {
             </View>
           </View>
         }
+        ListFooterComponent={functions.length > 5 ? (
+          <Pressable
+            onPress={() => setShowAllFunctions((s) => !s)}
+            style={{ marginHorizontal: 20, marginTop: 4 }}
+          >
+            <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
+              {showAllFunctions ? "Ver menos" : `Ver todas (${functions.length - 5} más)`}
+            </Text>
+          </Pressable>
+        ) : null}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate("FunctionDetail", { functionId: item.id })}

@@ -26,7 +26,7 @@ export const MiniBarChart = ({
 }) => {
   const { theme } = useAppState();
   const palette = getPalette(theme);
-  const max = Math.max(...data.map((item) => item.value), 0);
+  const max = Math.max(...data.map((d) => d.value), 0);
 
   return (
     <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
@@ -45,11 +45,7 @@ export const MiniBarChart = ({
                   width: "100%",
                   height: max === 0 || item.value <= 0 ? 4 : Math.max(16, (item.value / max) * barAreaHeight),
                   borderRadius: 12,
-                  backgroundColor: isActive
-                    ? palette.primary
-                    : theme === "dark"
-                      ? palette.surfaceMuted
-                      : palette.primarySoft,
+                  backgroundColor: isActive ? palette.primary : palette.primarySoft,
                 }}
               />
             </View>

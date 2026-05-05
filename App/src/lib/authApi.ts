@@ -1,5 +1,6 @@
 // lib/authApi.tsx
 import type { User } from "./types";
+import { env } from "./env";
 
 export type AuthTokens = {
   accessToken: string;
@@ -28,15 +29,12 @@ type LoginNeedsPasswordChangeResponse = {
   sessionToken: string;
 };
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+const BASE_URL = env.apiUrl;
 const baseHeaders: Record<string, string> = {
   "Content-Type": "application/json",
   Accept: "application/json",
+  "x-api-key": env.apiKey,
 };
-
-if (process.env.EXPO_PUBLIC_API_KEY) {
-  baseHeaders["x-api-key"] = process.env.EXPO_PUBLIC_API_KEY;
-}
 
 // Construimos el AuthTokens a partir de la respuesta cruda
 const toTokens = (raw: LoginRawResponse): AuthTokens => ({

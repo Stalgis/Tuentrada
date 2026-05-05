@@ -6,92 +6,88 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppStackParamList } from "../navigation/types";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
+import Chip from "../components/stitch/Chip";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { useTranslation } from "../hooks/useTranslation";
 import { getPalette } from "../lib/theme";
+import { radius, spacing, typography } from "../lib/design";
+
+const themeOptions: { key: "light" | "dark" | "system"; label: string }[] = [
+  { key: "light", label: "Claro" },
+  { key: "dark", label: "Oscuro" },
+  { key: "system", label: "Sistema" },
+];
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { user, biometricEnabled, disableBiometric, logout } = useAuth();
-  const {
-    themePreference,
-    setTheme,
-    theme,
-  } = useAppState();
+  const { themePreference, setTheme, theme } = useAppState();
   const { t } = useTranslation();
   const palette = getPalette(theme);
 
   const handleSignOut = () => {
     Alert.alert(
-      t('signOutConfirmTitle'),
-      t('signOutConfirmMessage'),
+      t("signOutConfirmTitle"),
+      t("signOutConfirmMessage"),
       [
-        { text: t('signOutConfirmCancel'), style: 'cancel' },
-        {
-          text: t('signOut'),
-          style: 'destructive',
-          onPress: () => { logout(); },
-        },
+        { text: t("signOutConfirmCancel"), style: "cancel" },
+        { text: t("signOut"), style: "destructive", onPress: () => { logout(); } },
       ],
     );
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <AppHeader title="Perfil" subtitle="Preferencias" onBackPress={() => navigation.goBack()} />
-        <View style={{ paddingHorizontal: 20, gap: 14 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: spacing["2xl"] }}>
+        <AppHeader title="Perfil" subtitle="Preferencias" avatarInitials={user?.initials} onBackPress={() => navigation.goBack()} />
+        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md + 2 }}>
           <SurfaceCard>
-            <Text style={{ color: palette.text, fontSize: 24, fontWeight: "800" }}>{user?.name ?? "Dashboard Preview"}</Text>
-            <Text style={{ color: palette.subtext, fontSize: 14, marginTop: 6 }}>{user?.email ?? "preview@tuentrada.com"}</Text>
+            <Text style={{ ...typography.heading, color: palette.text }}>
+              {user?.name ?? "Dashboard Preview"}
+            </Text>
+            <Text style={{ fontSize: 14, color: palette.subtext, marginTop: spacing.xs + 2 }}>
+              {user?.email ?? "preview@tuentrada.com"}
+            </Text>
           </SurfaceCard>
 
           <SurfaceCard>
-            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Apariencia</Text>
-            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
+            <Text style={{ ...typography.title, color: palette.text }}>Apariencia</Text>
+            <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
               Cambiá entre modo claro, oscuro o sistema.
             </Text>
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-              {[
-                { key: "light", label: "Claro" },
-                { key: "dark", label: "Oscuro" },
-                { key: "system", label: "Sistema" },
-              ].map((option) => {
-                const active = themePreference === option.key;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => setTheme(option.key as typeof themePreference)}
-                    style={{
-                      backgroundColor: active ? palette.primary : palette.surfaceMuted,
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 11,
-                    }}
-                  >
-                    <Text style={{ color: active ? "#fff" : palette.subtext, fontWeight: "700" }}>{option.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={{ flexDirection: "row", gap: spacing.sm + 2, marginTop: spacing.base }}>
+              {themeOptions.map((option) => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={themePreference === option.key}
+                  onPress={() => setTheme(option.key)}
+                />
+              ))}
             </View>
           </SurfaceCard>
 
           <SurfaceCard>
-            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{t("securityTitle")}</Text>
-            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>{t("securityBody")}</Text>
+            <Text style={{ ...typography.title, color: palette.text }}>{t("securityTitle")}</Text>
+            <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
+              {t("securityBody")}
+            </Text>
             {biometricEnabled ? (
               <Pressable
                 onPress={disableBiometric}
-                style={{
-                  marginTop: 16,
+                style={({ pressed }) => ({
+                  marginTop: spacing.base,
                   backgroundColor: palette.surfaceMuted,
-                  borderRadius: 20,
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                }}
+                  borderRadius: radius.lg,
+                  paddingHorizontal: spacing.base,
+                  paddingVertical: spacing.md + 2,
+                  opacity: pressed ? 0.85 : 1,
+                })}
               >
-                <Text style={{ color: palette.text, fontWeight: "700" }}>{t("faceIdDisable")}</Text>
+                <Text style={{ color: palette.text, fontWeight: "700", fontSize: 14 }}>
+                  {t("faceIdDisable")}
+                </Text>
               </Pressable>
             ) : null}
           </SurfaceCard>
@@ -99,14 +95,14 @@ const ProfileScreen = () => {
           <Pressable
             onPress={handleSignOut}
             style={{
-              backgroundColor: palette.primary,
-              borderRadius: 999,
-              paddingVertical: 16,
+              backgroundColor: palette.danger,
+              borderRadius: radius.pill,
+              paddingVertical: spacing.base,
               alignItems: "center",
-              marginTop: 6,
+              marginTop: spacing.xs + 2,
             }}
           >
-            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{t("signOut")}</Text>
+            <Text style={{ color: "#ffffff", fontWeight: "800", fontSize: 15 }}>{t("signOut")}</Text>
           </Pressable>
         </View>
       </ScrollView>
