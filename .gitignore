@@ -45,4 +45,4 @@ app-example
 /android
 
 # AI tool configs (may contain API keys)
-.codex/
+.codex/config.toml
