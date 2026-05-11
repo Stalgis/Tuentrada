@@ -43,3 +43,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# AI tool configs (may contain API keys)
+.codex/
