@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "App",
-    "slug": "App",
+    "name": "Tuentrada",
+    "slug": "tuentrada",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -13,9 +13,12 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "Usamos Face ID para proteger tu cuenta."
       },
-      "bundleIdentifier": "com.anonymous.App"
+      "bundleIdentifier": "com.stalgis.tuentrada",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.stalgis.tuentrada",
+      "versionCode": 1,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
