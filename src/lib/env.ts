@@ -19,12 +19,14 @@ const schema = z.object({
   EXPO_PUBLIC_API_URL: urlSchema,
   EXPO_PUBLIC_BASE_URL: urlSchema,
   EXPO_PUBLIC_API_KEY: z.string().trim().min(1, "es requerido"),
+  EXPO_PUBLIC_SENTRY_DSN: z.string().trim().optional(),
 });
 
 const parsed = schema.safeParse({
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
   EXPO_PUBLIC_BASE_URL: process.env.EXPO_PUBLIC_BASE_URL,
   EXPO_PUBLIC_API_KEY: process.env.EXPO_PUBLIC_API_KEY,
+  EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
 });
 
 if (!parsed.success) {
@@ -40,4 +42,5 @@ export const env = {
   apiUrl: parsed.data.EXPO_PUBLIC_API_URL,
   baseUrl: parsed.data.EXPO_PUBLIC_BASE_URL.replace(/\/+$/, ""),
   apiKey: parsed.data.EXPO_PUBLIC_API_KEY,
+  sentryDsn: parsed.data.EXPO_PUBLIC_SENTRY_DSN || undefined,
 } as const;

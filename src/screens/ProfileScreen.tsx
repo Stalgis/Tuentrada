@@ -1,5 +1,6 @@
 import React from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -90,6 +91,53 @@ const ProfileScreen = () => {
                 </Text>
               </Pressable>
             ) : null}
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <Text style={{ ...typography.title, color: palette.text }}>Ayuda</Text>
+            <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
+              Accedé al panel de reportes o contactá a soporte técnico.
+            </Text>
+            <View style={{ marginTop: spacing.base, gap: spacing.sm }}>
+              <Pressable
+                onPress={() => Linking.openURL("https://panel.tuentrada.com/reportes")}
+                accessibilityRole="link"
+                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              >
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: radius.lg,
+                  paddingHorizontal: spacing.base,
+                  paddingVertical: spacing.md + 2,
+                }}>
+                  <Feather name="external-link" size={16} color={palette.primary} />
+                  <Text style={{ marginLeft: spacing.sm, color: palette.primary, fontWeight: "700", fontSize: 14 }}>
+                    Panel de reportes
+                  </Text>
+                </View>
+              </Pressable>
+              <Pressable
+                onPress={() => Linking.openURL("mailto:soportetecnico@tuentrada.com")}
+                accessibilityRole="link"
+                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              >
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: radius.lg,
+                  paddingHorizontal: spacing.base,
+                  paddingVertical: spacing.md + 2,
+                }}>
+                  <Feather name="mail" size={16} color={palette.primary} />
+                  <Text style={{ marginLeft: spacing.sm, color: palette.primary, fontWeight: "700", fontSize: 14 }}>
+                    soportetecnico@tuentrada.com
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
           </SurfaceCard>
 
           <Pressable
