@@ -20,12 +20,31 @@ const themeOptions: { key: "light" | "dark" | "system"; label: string }[] = [
   { key: "system", label: "Sistema" },
 ];
 
+const SUPPORT_EMAIL = "soportetecnico@tuentrada.com";
+const PANEL_URL = "https://panel.tuentrada.com/reportes";
+
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { user, biometricEnabled, disableBiometric, logout } = useAuth();
   const { themePreference, setTheme, theme } = useAppState();
   const { t } = useTranslation();
   const palette = getPalette(theme);
+
+  const openPanel = async () => {
+    try {
+      await Linking.openURL(PANEL_URL);
+    } catch {
+      Alert.alert("No se pudo abrir el panel", PANEL_URL);
+    }
+  };
+
+  const openMail = async () => {
+    try {
+      await Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+    } catch {
+      Alert.alert("No se pudo abrir el correo", `Escribinos a ${SUPPORT_EMAIL}`);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -100,7 +119,7 @@ const ProfileScreen = () => {
             </Text>
             <View style={{ marginTop: spacing.base, gap: spacing.sm }}>
               <Pressable
-                onPress={() => Linking.openURL("https://panel.tuentrada.com/reportes")}
+                onPress={openPanel}
                 accessibilityRole="link"
                 style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
               >
@@ -119,7 +138,7 @@ const ProfileScreen = () => {
                 </View>
               </Pressable>
               <Pressable
-                onPress={() => Linking.openURL("mailto:soportetecnico@tuentrada.com")}
+                onPress={openMail}
                 accessibilityRole="link"
                 style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
               >
