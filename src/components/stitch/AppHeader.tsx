@@ -1,5 +1,6 @@
 import React, { type ReactNode } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { Pressable, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Avatar from "../Avatar";
 import { useAppState } from "../../store/appState";

@@ -1,5 +1,6 @@
-import type { Event, EventStatus } from "./types";
+import * as Sentry from "@sentry/react-native";
 import { env } from "./env";
+import type { Event, EventStatus } from "./types";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
@@ -54,7 +55,11 @@ const buildQuery = (params: ReportParams): string => {
   return out ? `?${out}` : "";
 };
 
-const apiFetch = async <T>(path: string, token: string, params: ReportParams = {}): Promise<T> => {
+const apiFetch = async <T>(
+  path: string,
+  token: string,
+  params: ReportParams = {},
+): Promise<T> => {
   const res = await fetch(`${BASE_URL}${path}${buildQuery(params)}`, {
     method: "GET",
     headers: makeHeaders(token),
@@ -73,8 +78,15 @@ const apiFetch = async <T>(path: string, token: string, params: ReportParams = {
   }
 
   if (!res.ok || json?.success === false) {
-    const message = typeof json?.message === "string" ? json.message : "Error en la solicitud";
-    throw new ApiError(res.status, message);
+    const message =
+      typeof json?.message === "string"
+        ? json.message
+        : "Error en la solicitud";
+    const error = new ApiError(res.status, message);
+    if (res.status >= 500) {
+      Sentry.captureException(error, { extra: { path, status: res.status } });
+    }
+    throw error;
   }
 
   return json.data as T;
@@ -136,11 +148,15 @@ export type PaymentRow = {
 type EventListResponse = { resources: Record<string, string> };
 
 export const fetchEventList = async (token: string): Promise<Event[]> => {
-  const data = await apiFetch<EventListResponse>("/api/v1/report/event-list", token);
+  const data = await apiFetch<EventListResponse>(
+    "/api/v1/report/event-list",
+    token,
+  );
   const resources = data?.resources ?? {};
   return Object.entries(resources).map(([id, nameDate]) => {
     const dashIndex = nameDate.lastIndexOf(" - ");
-    const name = dashIndex >= 0 ? nameDate.slice(0, dashIndex).trim() : nameDate;
+    const name =
+      dashIndex >= 0 ? nameDate.slice(0, dashIndex).trim() : nameDate;
     const dateStr = dashIndex >= 0 ? nameDate.slice(dashIndex + 3).trim() : "";
     const dateISO = dateStr ? dateStr.replace(" ", "T") + "-03:00" : "";
     const isPast = dateISO ? new Date(dateISO).getTime() < Date.now() : false;
@@ -158,12 +174,22 @@ export const fetchEventList = async (token: string): Promise<Event[]> => {
   });
 };
 
-export const fetchStats = async (token: string, params: ReportParams = {}): Promise<StatsData> => {
-  const data = await apiFetch<{ stats: StatsData }>("/api/v1/report/stats", token, params);
+export const fetchStats = async (
+  token: string,
+  params: ReportParams = {},
+): Promise<StatsData> => {
+  const data = await apiFetch<{ stats: StatsData }>(
+    "/api/v1/report/stats",
+    token,
+    params,
+  );
   return data.stats;
 };
 
-export const fetchOnlineSales = async (token: string, eventId: string): Promise<Sector[]> => {
+export const fetchOnlineSales = async (
+  token: string,
+  eventId: string,
+): Promise<Sector[]> => {
   const data = await apiFetch<{ "online-sales": Sector[] }>(
     "/api/v1/report/online-sales",
     token,
@@ -207,7 +233,10 @@ export const fetchPayments = async (
   return payments.map((p) => ({
     payment_name: p.payment_name,
     sold_tickets: Number(p.sold_tickets) || 0,
-    total_revenue: typeof p.total_revenue === "string" ? Number(p.total_revenue) || 0 : p.total_revenue,
+    total_revenue:
+      typeof p.total_revenue === "string"
+        ? Number(p.total_revenue) || 0
+        : p.total_revenue,
   }));
 };
 

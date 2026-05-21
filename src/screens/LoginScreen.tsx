@@ -21,7 +21,7 @@ import { radius, shadow, spacing, typography } from "../lib/design";
 const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
 
 const LoginScreen = () => {
-  const { login, loginWithBiometric, loading, biometricEnabled } = useAuth();
+  const { login, loginWithBiometric, loading, biometricEnabled, sessionExpired } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useAppState();
@@ -164,6 +164,28 @@ const LoginScreen = () => {
                 <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
                   Ingresá con tu cuenta para continuar
                 </Text>
+
+                {sessionExpired ? (
+                  <View
+                    style={{
+                      marginTop: spacing.lg,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: palette.warning,
+                      backgroundColor: palette.surfaceMuted,
+                      paddingHorizontal: spacing.base,
+                      paddingVertical: spacing.md,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                    }}
+                  >
+                    <Feather name="clock" size={15} color={palette.warning} />
+                    <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: palette.warning }}>
+                      Tu sesión expiró. Iniciá sesión nuevamente.
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={{ marginTop: spacing.xl }}>
                   <Text

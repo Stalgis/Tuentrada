@@ -1,5 +1,6 @@
 import React from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,12 +20,31 @@ const themeOptions: { key: "light" | "dark" | "system"; label: string }[] = [
   { key: "system", label: "Sistema" },
 ];
 
+const SUPPORT_EMAIL = "soportetecnico@tuentrada.com";
+const PANEL_URL = "https://panel.tuentrada.com/reportes";
+
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { user, biometricEnabled, disableBiometric, logout } = useAuth();
   const { themePreference, setTheme, theme } = useAppState();
   const { t } = useTranslation();
   const palette = getPalette(theme);
+
+  const openPanel = async () => {
+    try {
+      await Linking.openURL(PANEL_URL);
+    } catch {
+      Alert.alert("No se pudo abrir el panel", PANEL_URL);
+    }
+  };
+
+  const openMail = async () => {
+    try {
+      await Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+    } catch {
+      Alert.alert("No se pudo abrir el correo", `Escribinos a ${SUPPORT_EMAIL}`);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -90,6 +110,53 @@ const ProfileScreen = () => {
                 </Text>
               </Pressable>
             ) : null}
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <Text style={{ ...typography.title, color: palette.text }}>Ayuda</Text>
+            <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
+              Accedé al panel de reportes o contactá a soporte técnico.
+            </Text>
+            <View style={{ marginTop: spacing.base, gap: spacing.sm }}>
+              <Pressable
+                onPress={openPanel}
+                accessibilityRole="link"
+                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              >
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: radius.lg,
+                  paddingHorizontal: spacing.base,
+                  paddingVertical: spacing.md + 2,
+                }}>
+                  <Feather name="external-link" size={16} color={palette.primary} />
+                  <Text style={{ marginLeft: spacing.sm, color: palette.primary, fontWeight: "700", fontSize: 14 }}>
+                    Panel de reportes
+                  </Text>
+                </View>
+              </Pressable>
+              <Pressable
+                onPress={openMail}
+                accessibilityRole="link"
+                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              >
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: radius.lg,
+                  paddingHorizontal: spacing.base,
+                  paddingVertical: spacing.md + 2,
+                }}>
+                  <Feather name="mail" size={16} color={palette.primary} />
+                  <Text style={{ marginLeft: spacing.sm, color: palette.primary, fontWeight: "700", fontSize: 14 }}>
+                    soportetecnico@tuentrada.com
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
           </SurfaceCard>
 
           <Pressable

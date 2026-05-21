@@ -25,6 +25,7 @@ type AuthContextValue = {
   biometricEnabled: boolean;
   biometricAvailable: boolean;
   shouldPromptBiometricEnrollment: boolean;
+  sessionExpired: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithBiometric: () => Promise<void>;
@@ -55,6 +56,7 @@ const AUTH_BYPASS_CONTEXT: AuthContextValue = {
   biometricEnabled: false,
   biometricAvailable: false,
   shouldPromptBiometricEnrollment: false,
+  sessionExpired: false,
   loading: false,
   login: async () => {},
   loginWithBiometric: async () => {},
@@ -95,6 +97,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [shouldPromptBiometricEnrollment, setShouldPromptBiometricEnrollment] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [loading, setLoading] = useState(false);
   const pendingCredentialsRef = useRef<StoredBiometricCredentials | null>(null);
 
@@ -232,6 +235,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      setSessionExpired(false);
       setLoading(true);
       try {
         const normalizedEmail = email.trim();
@@ -312,6 +316,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     // 401 from any report API call → drop session + redirect to login
     setOnUnauthorized(() => {
+      setSessionExpired(true);
       logout();
     });
     return () => setOnUnauthorized(null);
@@ -329,6 +334,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       biometricEnabled,
       biometricAvailable,
       shouldPromptBiometricEnrollment,
+      sessionExpired,
       loading,
       login,
       loginWithBiometric,
@@ -348,6 +354,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       login,
       loginWithBiometric,
       logout,
+      sessionExpired,
       shouldPromptBiometricEnrollment,
       status,
       user,
