@@ -162,8 +162,16 @@ const SalesAnalyticsScreen = () => {
     );
   }, [selectedEvent]);
 
-  const visibleFunctions = showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5);
-  const hiddenCount = selectedFunctions.length - 5;
+  // Vista inicial: próximas 5 funciones en venta (on_sale y fecha futura).
+  const initialFunctions = useMemo(() => {
+    const now = Date.now();
+    return selectedFunctions
+      .filter((f) => f.status === "on_sale" && new Date(f.dateISO).getTime() >= now)
+      .slice(0, 5);
+  }, [selectedFunctions]);
+
+  const visibleFunctions = showAllFunctions ? selectedFunctions : initialFunctions;
+  const hiddenCount = selectedFunctions.length - initialFunctions.length;
 
   const pillLabel = selectedEvent
     ? `${selectedFunctions.length} función${selectedFunctions.length !== 1 ? "es" : ""}`

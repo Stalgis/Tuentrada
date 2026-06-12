@@ -8,6 +8,8 @@ export type EventFunction = {
   status: EventStatus;
   ticketsSold: number;
   grossRevenueARS: number;
+  /** Invitaciones (cortesías) emitidas para la función */
+  invitations: number;
 };
 
 export type Event = {
@@ -25,6 +27,7 @@ export type Event = {
   featuredTag?: string;
   checkInProgress?: number;
   grossRevenueARS?: number;
+  invitations?: number;
   /** Multiple showtimes/performances under the same event name */
   functions?: EventFunction[];
 };

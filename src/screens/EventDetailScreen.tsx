@@ -53,6 +53,17 @@ const EventDetailScreen = () => {
   const finishedCount = functions.filter((f) => f.status === "finished").length;
   const [showAllFunctions, setShowAllFunctions] = useState(false);
 
+  // Vista inicial: próximas 5 funciones en venta (on_sale y fecha futura).
+  const initialFunctions = useMemo(() => {
+    const now = Date.now();
+    return functions
+      .filter((f) => f.status === "on_sale" && new Date(f.dateISO).getTime() >= now)
+      .slice(0, 5);
+  }, [functions]);
+
+  const visibleFunctions = showAllFunctions ? functions : initialFunctions;
+  const hiddenCount = functions.length - initialFunctions.length;
+
   if (!event) {
     return (
       <SafeAreaView
@@ -67,7 +78,7 @@ const EventDetailScreen = () => {
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
       <FlatList
-        data={showAllFunctions ? functions : functions.slice(0, 5)}
+        data={visibleFunctions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -128,50 +139,68 @@ const EventDetailScreen = () => {
             </View>
           </View>
         }
-        ListFooterComponent={functions.length > 5 ? (
+        ListFooterComponent={hiddenCount > 0 ? (
           <Pressable
             onPress={() => setShowAllFunctions((s) => !s)}
             style={{ marginHorizontal: 20, marginTop: 4 }}
           >
             <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-              {showAllFunctions ? "Ver menos" : `Ver todas (${functions.length - 5} más)`}
+              {showAllFunctions ? "Ver menos" : `Ver todas (${hiddenCount} más)`}
             </Text>
           </Pressable>
         ) : null}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => navigation.navigate("FunctionDetail", { functionId: item.id })}
-            style={{ marginHorizontal: 20, marginBottom: 10 }}
-          >
-            <SurfaceCard>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: palette.text, fontSize: 15, fontWeight: "700" }}>
-                    {formatDateLong(item.dateISO)}
-                  </Text>
-                  <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                    {formatInteger(item.ticketsSold)} entradas · {formatCurrencyARS(item.grossRevenueARS)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 }}>
-                  <View
-                    style={{
-                      backgroundColor: statusColor(item.status, palette),
-                      borderRadius: 999,
-                      paddingHorizontal: 8,
-                      paddingVertical: 5,
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
-                      {statusLabel(item.status)}
+        renderItem={({ item }) => {
+          const isAllInvitations = item.ticketsSold === 0 && item.invitations > 0;
+          return (
+            <Pressable
+              onPress={() => navigation.navigate("FunctionDetail", { functionId: item.id })}
+              style={{ marginHorizontal: 20, marginBottom: 10 }}
+            >
+              <SurfaceCard>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "700" }}>
+                      {formatDateLong(item.dateISO)}
+                    </Text>
+                    <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
+                      {formatInteger(item.ticketsSold)} entradas · {formatCurrencyARS(item.grossRevenueARS)}
+                      {item.invitations > 0 ? ` · ${formatInteger(item.invitations)} invitaciones` : ""}
                     </Text>
                   </View>
-                  <Feather name="chevron-right" size={16} color={palette.subtext} />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 }}>
+                    {isAllInvitations && (
+                      <View
+                        style={{
+                          backgroundColor: palette.primarySoft,
+                          borderRadius: 999,
+                          paddingHorizontal: 8,
+                          paddingVertical: 5,
+                        }}
+                      >
+                        <Text style={{ color: palette.primary, fontSize: 10, fontWeight: "800" }}>
+                          INVITACIÓN
+                        </Text>
+                      </View>
+                    )}
+                    <View
+                      style={{
+                        backgroundColor: statusColor(item.status, palette),
+                        borderRadius: 999,
+                        paddingHorizontal: 8,
+                        paddingVertical: 5,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
+                        {statusLabel(item.status)}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={palette.subtext} />
+                  </View>
                 </View>
-              </View>
-            </SurfaceCard>
-          </Pressable>
-        )}
+              </SurfaceCard>
+            </Pressable>
+          );
+        }}
       />
     </SafeAreaView>
   );

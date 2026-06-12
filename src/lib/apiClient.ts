@@ -54,6 +54,7 @@ function groupEventsByName(flat: Event[]): Event[] {
           status: ev.status,
           ticketsSold: ev.ticketsSold,
           grossRevenueARS: ev.grossRevenueARS ?? 0,
+          invitations: ev.invitations ?? 0,
         }],
       };
     }
@@ -72,19 +73,49 @@ function groupEventsByName(flat: Event[]): Event[] {
       status: e.status,
       ticketsSold: e.ticketsSold,
       grossRevenueARS: e.grossRevenueARS ?? 0,
+      invitations: e.invitations ?? 0,
     }));
+
+    const ticketsSold = sorted.reduce((s, e) => s + e.ticketsSold, 0);
+    const grossRevenueARS = sorted.reduce((s, e) => s + (e.grossRevenueARS ?? 0), 0);
 
     return {
       ...upcoming,
       id: group[0].id,
       status: allFinished ? "finished" : anySoldOut ? "sold_out" : "on_sale",
-      ticketsSold: sorted.reduce((s, e) => s + e.ticketsSold, 0),
+      ticketsSold,
       ticketsAvailable: sorted.reduce((s, e) => s + e.ticketsAvailable, 0),
-      grossRevenueARS: sorted.reduce((s, e) => s + (e.grossRevenueARS ?? 0), 0),
+      grossRevenueARS,
+      ticketPriceARS: ticketsSold > 0 ? grossRevenueARS / ticketsSold : 0,
       functions,
     };
   });
 }
+
+export type FunctionStats = { total: number; tickets: number; invitations: number };
+
+// El backend solo expone stats por función (/stats?id=). Para tener recaudación
+// y entradas reales por función, las pedimos en paralelo (en lotes) y cacheadas.
+const fetchFunctionStatsMap = async (
+  token: string,
+  functionIds: string[],
+  date: string = "all",
+): Promise<Record<string, FunctionStats>> => {
+  const CONCURRENCY = 8;
+  const out: Record<string, FunctionStats> = {};
+  for (let i = 0; i < functionIds.length; i += CONCURRENCY) {
+    const batch = functionIds.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((id) =>
+        fetchEventStats(token, id, date)
+          .then((s) => ({ id, total: s.total ?? 0, tickets: s.tickets ?? 0, invitations: s.invitations ?? 0 }))
+          .catch(() => ({ id, total: 0, tickets: 0, invitations: 0 })),
+      ),
+    );
+    for (const r of results) out[r.id] = { total: r.total, tickets: r.tickets, invitations: r.invitations };
+  }
+  return out;
+};
 
 // Events enriched with per-event stats
 export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
@@ -92,17 +123,24 @@ export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
   const cached = getCached<Event[]>(cacheKey);
   if (cached) return cached;
 
-  const [flatEvents, stats] = await Promise.all([
-    fetchEventList(token),
-    fetchStats(token, { date: "all" }),
-  ]);
+  const flatEvents = await fetchEventList(token);
+  const statsMap = await fetchFunctionStatsMap(
+    token,
+    flatEvents.map((e) => e.id),
+  );
 
-  const enrichedFlat = flatEvents.map((event, i) => ({
-    ...event,
-    ticketsSold: stats.chartTickets[i] ?? 0,
-    grossRevenueARS: stats.chartTotal[i] ?? 0,
-    ticketPriceARS: stats.ticket_medio ?? 0,
-  }));
+  const enrichedFlat = flatEvents.map((event) => {
+    const s = statsMap[event.id];
+    const tickets = s?.tickets ?? 0;
+    const revenue = s?.total ?? 0;
+    return {
+      ...event,
+      ticketsSold: tickets,
+      grossRevenueARS: revenue,
+      ticketPriceARS: tickets > 0 ? revenue / tickets : 0,
+      invitations: s?.invitations ?? 0,
+    };
+  });
 
   const grouped = groupEventsByName(enrichedFlat);
   setCached(cacheKey, grouped);
