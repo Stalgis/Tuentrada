@@ -191,7 +191,19 @@ const DashboardScreen = () => {
                 No se pudieron cargar los eventos.
               </Text>
             ) : primaryEvent ? (
-              <View style={{ marginTop: 16, backgroundColor: palette.surfaceMuted, borderRadius: 22, padding: 16 }}>
+              <Pressable
+                disabled={!primaryFunction}
+                onPress={() =>
+                  primaryFunction &&
+                  navigation.navigate("Events", {
+                    screen: "FunctionDetail",
+                    params: { functionId: primaryFunction.id },
+                  })
+                }
+                style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+              >
+                <View style={{ marginTop: 16, backgroundColor: palette.surfaceMuted, borderRadius: 22, padding: 16, flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{primaryEvent.name}</Text>
                 <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
                   {formatDateTimeShort(primaryFunction?.dateISO ?? primaryEvent.dateISO)} · {statusLabel[primaryFunction?.status ?? primaryEvent.status]}
@@ -210,7 +222,10 @@ const DashboardScreen = () => {
                     </Text>
                   </View>
                 </View>
-              </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={palette.subtext} style={{ marginLeft: 12 }} />
+                </View>
+              </Pressable>
             ) : null}
           </SurfaceCard>
 
