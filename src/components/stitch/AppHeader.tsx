@@ -79,7 +79,7 @@ const AppHeader = ({
             borderColor: palette.hairline,
           }}
         >
-          <Image source={logoSource} resizeMode="contain" style={{ width: 92, height: 20 }} />
+          <Image source={logoSource} contentFit="contain" style={{ width: 92, height: 20 }} />
         </View>
 
         {pillLabel ? (

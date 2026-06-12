@@ -129,6 +129,8 @@ const FunctionDetailScreen = () => {
   );
 
   const grossRevenue = fn?.grossRevenueARS ?? 0;
+  const ticketsSold = fn?.ticketsSold ?? 0;
+  const avgPrice = ticketsSold > 0 ? grossRevenue / ticketsSold : 0;
 
   if (!event || !fn) {
     return (
@@ -166,7 +168,10 @@ const FunctionDetailScreen = () => {
               {formatCurrencyARS(grossRevenue)}
             </Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-              {formatInteger(fn.ticketsSold)} entradas · precio promedio {formatCurrencyARS(event.ticketPriceARS)}
+              {formatInteger(fn.ticketsSold)} entradas · {formatInteger(fn.invitations)} invitaciones
+            </Text>
+            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+              Precio promedio {formatCurrencyARS(avgPrice)}
             </Text>
           </SurfaceCard>
 

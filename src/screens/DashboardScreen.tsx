@@ -6,7 +6,7 @@ import { useNavigation } from "@react-navigation/native";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
 import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
-import { formatCurrencyARS, formatDateShort, formatInteger, formatPercent } from "../lib/formatters";
+import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent } from "../lib/formatters";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -62,6 +62,17 @@ const DashboardScreen = () => {
 
   const primaryEvent = upcomingEvents[0];
 
+  // La próxima función concreta del próximo evento (no el agregado de todas).
+  const primaryFunction = useMemo(() => {
+    const fns = primaryEvent?.functions;
+    if (!fns?.length) return undefined;
+    const now = Date.now();
+    const upcoming = fns
+      .filter((f) => new Date(f.dateISO).getTime() >= now)
+      .sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime());
+    return upcoming[0] ?? fns[0];
+  }, [primaryEvent]);
+
   // Flatten all upcoming, on-sale functions across all events and rank by lowest sales
   const attentionFunctions = useMemo<AttentionFunction[]>(() => {
     const now = Date.now();
@@ -83,7 +94,7 @@ const DashboardScreen = () => {
   const monthDeltaPercent = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
   const thisMonthTickets = thisMonthStats?.tickets ?? 0;
   const ticketMedio = thisMonthStats?.ticket_medio ?? 0;
-  const primaryEventRevenue = primaryEvent?.grossRevenueARS ?? 0;
+  const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
@@ -180,10 +191,22 @@ const DashboardScreen = () => {
                 No se pudieron cargar los eventos.
               </Text>
             ) : primaryEvent ? (
-              <View style={{ marginTop: 16, backgroundColor: palette.surfaceMuted, borderRadius: 22, padding: 16 }}>
+              <Pressable
+                disabled={!primaryFunction}
+                onPress={() =>
+                  primaryFunction &&
+                  navigation.navigate("Events", {
+                    screen: "FunctionDetail",
+                    params: { functionId: primaryFunction.id },
+                  })
+                }
+                style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+              >
+                <View style={{ marginTop: 16, backgroundColor: palette.surfaceMuted, borderRadius: 22, padding: 16, flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{primaryEvent.name}</Text>
                 <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                  {formatDateShort(primaryEvent.dateISO)} · {statusLabel[primaryEvent.status]}
+                  {formatDateTimeShort(primaryFunction?.dateISO ?? primaryEvent.dateISO)} · {statusLabel[primaryFunction?.status ?? primaryEvent.status]}
                 </Text>
                 <View style={{ flexDirection: "row", gap: 18, marginTop: 14 }}>
                   <View>
@@ -195,11 +218,14 @@ const DashboardScreen = () => {
                   <View>
                     <Text style={{ color: palette.subtext, fontSize: 11 }}>Vendidas</Text>
                     <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {formatInteger(primaryEvent.ticketsSold)}
+                      {formatInteger(primaryFunction?.ticketsSold ?? 0)}
                     </Text>
                   </View>
                 </View>
-              </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={palette.subtext} style={{ marginLeft: 12 }} />
+                </View>
+              </Pressable>
             ) : null}
           </SurfaceCard>
 
@@ -247,7 +273,7 @@ const DashboardScreen = () => {
                         {fn.eventName}
                       </Text>
                       <Text numberOfLines={1} style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                        {formatDateShort(fn.dateISO)} · {formatInteger(fn.ticketsSold)} entradas
+                        {formatDateTimeShort(fn.dateISO)} · {formatInteger(fn.ticketsSold)} entradas
                       </Text>
                     </View>
                     <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 10 }} />
