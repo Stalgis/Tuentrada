@@ -163,8 +163,11 @@ const EventDetailScreen = () => {
                       {formatDateLong(item.dateISO)}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                      {formatInteger(item.ticketsSold)} entradas · {formatCurrencyARS(item.grossRevenueARS)}
+                      {formatInteger(item.ticketsSold)} entradas
                       {item.invitations > 0 ? ` · ${formatInteger(item.invitations)} invitaciones` : ""}
+                    </Text>
+                    <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                      {formatCurrencyARS(item.grossRevenueARS)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 }}>

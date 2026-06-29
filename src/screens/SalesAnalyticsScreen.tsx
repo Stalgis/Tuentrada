@@ -138,6 +138,15 @@ const SalesAnalyticsScreen = () => {
     () => visibleEvents.reduce((sum, e) => sum + e.ticketsSold, 0),
     [visibleEvents],
   );
+  const totalInvitations = useMemo(
+    () =>
+      visibleEvents.reduce(
+        (sum, e) =>
+          sum + (e.functions?.reduce((s, f) => s + (f.invitations ?? 0), 0) ?? e.invitations ?? 0),
+        0,
+      ),
+    [visibleEvents],
+  );
 
   // Weekly bar chart data (last 7 days from history)
   const weeklyTrend = useMemo(
@@ -197,9 +206,6 @@ const SalesAnalyticsScreen = () => {
             <Text style={{ color: palette.text, fontSize: 36, fontWeight: "800", marginTop: 8 }}>
               {formatCurrencyARS(totalRevenue)}
             </Text>
-            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}>
-              {formatInteger(totalTicketsSold)} entradas vendidas
-            </Text>
           </SurfaceCard>
 
           {/* Dropdown selector — solo si hay más de 1 evento activo */}
@@ -244,17 +250,22 @@ const SalesAnalyticsScreen = () => {
             </SurfaceCard>
           )}
 
-          {/* Entradas vendidas */}
+          {/* Entradas vendidas e invitaciones */}
           <SurfaceCard>
-            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
-            <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-              {formatInteger(totalTicketsSold)}
-            </Text>
-            <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 4 }}>
-              {selectedEvent
-                ? `Suma de ${selectedFunctions.length} funciones`
-                : `Suma de ${activeEvents.length} eventos activos`}
-            </Text>
+            <View style={{ flexDirection: "row" }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
+                <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
+                  {formatInteger(totalTicketsSold)}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Invitaciones</Text>
+                <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
+                  {formatInteger(totalInvitations)}
+                </Text>
+              </View>
+            </View>
           </SurfaceCard>
 
           {/* Weekly sales chart */}
@@ -354,9 +365,14 @@ const SalesAnalyticsScreen = () => {
                       </View>
                       <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 6 }} />
                     </View>
-                    {/* Row 2: tickets + revenue */}
+                    {/* Row 2: tickets + invitations */}
                     <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>
-                      {formatInteger(fn.ticketsSold)} entradas · {formatCurrencyARS(fn.grossRevenueARS)}
+                      {formatInteger(fn.ticketsSold)} entradas
+                      {fn.invitations > 0 ? ` · ${formatInteger(fn.invitations)} invitaciones` : ""}
+                    </Text>
+                    {/* Row 3: revenue */}
+                    <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 2 }}>
+                      {formatCurrencyARS(fn.grossRevenueARS)}
                     </Text>
                   </Pressable>
                 ))}

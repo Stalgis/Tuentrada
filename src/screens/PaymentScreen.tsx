@@ -78,6 +78,11 @@ const PaymentScreen = () => {
     );
   }, [selectedEvent]);
 
+  const selectedFunction = useMemo(
+    () => selectedFunctions.find((f) => f.id === selectedFunctionId) ?? null,
+    [selectedFunctions, selectedFunctionId],
+  );
+
   const eventOptions = useMemo(
     () => [allEventsOption, ...activeEvents.map((e) => ({ key: e.id, value: e.name }))],
     [activeEvents],
@@ -139,6 +144,7 @@ const PaymentScreen = () => {
           title="Medios de pago"
           subtitle={selectedFunctionId ? "Vista por función" : "Distribución por gateway"}
           pillLabel={pillLabel}
+          onBackPress={selectedFunctionId ? () => setSelectedFunctionId(null) : undefined}
           onAvatarPress={() => navigation.navigate("Profile")}
           avatarInitials={user?.initials}
         />
@@ -190,17 +196,11 @@ const PaymentScreen = () => {
             </SurfaceCard>
           )}
 
-          {/* Function drill-down header — back to event level */}
-          {selectedFunctionId && (
-            <Pressable
-              onPress={() => setSelectedFunctionId(null)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Feather name="arrow-left" size={14} color={palette.primary} />
-              <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-                Volver al evento completo
-              </Text>
-            </Pressable>
+          {/* Selected function date/time */}
+          {selectedFunctionId && selectedFunction && (
+            <Text style={{ color: palette.subtext, fontSize: 13, fontWeight: "700", paddingHorizontal: 2 }}>
+              {formatDateLong(selectedFunction.dateISO)}
+            </Text>
           )}
 
           {/* Period filter */}
@@ -345,34 +345,54 @@ const PaymentScreen = () => {
                 Tocá una función para ver su desglose
               </Text>
               <View style={{ marginTop: 14, gap: 10 }}>
-                {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => (
-                  <Pressable
-                    key={fn.id}
-                    onPress={() => setSelectedFunctionId(fn.id)}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: palette.surfaceMuted,
-                        borderRadius: 18,
-                        paddingHorizontal: 14,
-                        paddingVertical: 12,
-                      }}
+                {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => {
+                  const isInvitationOnly = fn.ticketsSold === 0 && fn.grossRevenueARS === 0;
+                  return (
+                    <Pressable
+                      key={fn.id}
+                      onPress={() => setSelectedFunctionId(fn.id)}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                     >
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>
-                          {formatDateLong(fn.dateISO)}
-                        </Text>
-                        <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                          {formatInteger(fn.ticketsSold)} entradas · {formatCurrencyARS(fn.grossRevenueARS)}
-                        </Text>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: palette.surfaceMuted,
+                          borderRadius: 18,
+                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                        }}
+                      >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>
+                            {formatDateLong(fn.dateISO)}
+                          </Text>
+                          <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
+                            {isInvitationOnly
+                              ? `${formatInteger(fn.invitations)} invitaciones`
+                              : `${formatInteger(fn.ticketsSold)} entradas · ${formatCurrencyARS(fn.grossRevenueARS)}`}
+                          </Text>
+                        </View>
+                        {isInvitationOnly && (
+                          <View
+                            style={{
+                              backgroundColor: palette.primarySoft,
+                              borderRadius: 999,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              marginLeft: 10,
+                            }}
+                          >
+                            <Text style={{ color: palette.primary, fontSize: 11, fontWeight: "800" }}>
+                              Invitación
+                            </Text>
+                          </View>
+                        )}
+                        <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 10 }} />
                       </View>
-                      <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 10 }} />
-                    </View>
-                  </Pressable>
-                ))}
+                    </Pressable>
+                  );
+                })}
               </View>
               {selectedFunctions.length > 5 && (
                 <Pressable

@@ -93,6 +93,7 @@ const DashboardScreen = () => {
   const lastMonth = lastMonthStats?.total ?? 0;
   const monthDeltaPercent = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
   const thisMonthTickets = thisMonthStats?.tickets ?? 0;
+  const thisMonthInvitations = thisMonthStats?.invitations ?? 0;
   const ticketMedio = thisMonthStats?.ticket_medio ?? 0;
   const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
 
@@ -117,7 +118,12 @@ const DashboardScreen = () => {
                   <ActivityIndicator color={palette.primary} style={{ marginTop: 16, alignSelf: "flex-start" }} />
                 ) : (
                   <>
-                    <Text style={{ color: palette.text, fontSize: 32, fontWeight: "800", marginTop: 8, letterSpacing: -1 }}>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                      style={{ color: palette.text, fontSize: 32, fontWeight: "800", marginTop: 8, letterSpacing: -1 }}
+                    >
                       {formatCurrencyARS(thisMonth)}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
@@ -145,8 +151,7 @@ const DashboardScreen = () => {
               {[
                 { label: "Mes anterior", value: formatCurrencyARS(lastMonth) },
                 { label: "Ticket promedio", value: formatCurrencyARS(ticketMedio) },
-                { label: "Entradas", value: formatInteger(thisMonthTickets) },
-              ].map((item, index, arr) => (
+              ].map((item) => (
                 <View
                   key={item.label}
                   style={{
@@ -154,7 +159,7 @@ const DashboardScreen = () => {
                     alignItems: "center",
                     justifyContent: "space-between",
                     paddingVertical: 10,
-                    borderBottomWidth: index < arr.length - 1 ? 1 : 0,
+                    borderBottomWidth: 1,
                     borderBottomColor: palette.hairline,
                   }}
                 >
@@ -169,6 +174,25 @@ const DashboardScreen = () => {
                   </Text>
                 </View>
               ))}
+
+              <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10 }}>
+                {[
+                  { label: "Entradas", value: formatInteger(thisMonthTickets) },
+                  { label: "Invitaciones", value: formatInteger(thisMonthInvitations) },
+                ].map((item) => (
+                  <View key={item.label} style={{ flex: 1 }}>
+                    <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>
+                      {item.label}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 2 }}
+                    >
+                      {item.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </SurfaceCard>
 

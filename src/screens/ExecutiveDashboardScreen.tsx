@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
 import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
-import { formatCurrencyARS, formatDateShort, formatInteger, formatPercent } from "../lib/formatters";
+import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent } from "../lib/formatters";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -24,6 +24,7 @@ const ExecutiveDashboardScreen = () => {
   const [thisMonthStats, setThisMonthStats] = useState<StatsData | null>(null);
   const [lastMonthStats, setLastMonthStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [ranking, setRanking] = useState<"top" | "bottom">("top");
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
@@ -73,14 +74,21 @@ const ExecutiveDashboardScreen = () => {
   const goal = lastMonthRevenue > 0 ? lastMonthRevenue * 1.5 : totalRevenue * 1.5;
   const goalProgress = goal > 0 ? Math.min(100, (totalRevenue / goal) * 100) : 0;
 
-  // Top functions by grossRevenueARS
-  const topFunctions = useMemo(
+  // Functions ranked by grossRevenueARS (only those with sales)
+  const sellingFunctions = useMemo(
     () =>
       [...allFunctions]
         .filter((f) => (f.grossRevenueARS ?? 0) > 0)
-        .sort((a, b) => (b.grossRevenueARS ?? 0) - (a.grossRevenueARS ?? 0))
-        .slice(0, 5),
+        .sort((a, b) => (b.grossRevenueARS ?? 0) - (a.grossRevenueARS ?? 0)),
     [allFunctions],
+  );
+
+  const rankedFunctions = useMemo(
+    () =>
+      ranking === "top"
+        ? sellingFunctions.slice(0, 5)
+        : [...sellingFunctions].reverse().slice(0, 5),
+    [sellingFunctions, ranking],
   );
 
   return (
@@ -148,15 +156,57 @@ const ExecutiveDashboardScreen = () => {
 
           <View style={{ marginTop: 4 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Funciones top</Text>
+              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>
+                {ranking === "top" ? "Funciones top" : "Funciones peores"}
+              </Text>
               <Text style={{ color: palette.subtext, fontSize: 13 }}>Por ingreso acumulado</Text>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                backgroundColor: palette.surfaceMuted,
+                borderRadius: 999,
+                padding: 4,
+                marginBottom: 12,
+              }}
+            >
+              {([
+                { key: "top", label: "Top" },
+                { key: "bottom", label: "Peores" },
+              ] as const).map((opt) => {
+                const active = ranking === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => setRanking(opt.key)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 999,
+                      alignItems: "center",
+                      backgroundColor: active ? palette.primary : "transparent",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: active ? "#fff" : palette.subtext,
+                        fontSize: 13,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             {events.status === "loading" ? (
               <ActivityIndicator color={palette.primary} />
             ) : (
               <View style={{ gap: 10 }}>
-                {topFunctions.map((fn, index) => (
+                {rankedFunctions.map((fn, index) => (
                   <Pressable
                     key={fn.id}
                     onPress={() =>
@@ -188,7 +238,10 @@ const ExecutiveDashboardScreen = () => {
                             {fn.eventName}
                           </Text>
                           <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                            {formatDateShort(fn.dateISO)} · {formatInteger(fn.ticketsSold)} entradas
+                            {formatDateTimeShort(fn.dateISO)}
+                          </Text>
+                          <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
+                            {formatInteger(fn.ticketsSold)} entradas
                           </Text>
                         </View>
                         <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800" }}>
@@ -198,7 +251,7 @@ const ExecutiveDashboardScreen = () => {
                     </SurfaceCard>
                   </Pressable>
                 ))}
-                {topFunctions.length === 0 && (
+                {rankedFunctions.length === 0 && (
                   <Text style={{ color: palette.subtext, fontSize: 13 }}>
                     No hay datos de funciones disponibles.
                   </Text>
