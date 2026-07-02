@@ -33,6 +33,16 @@ export const formatDateTimeShort = (value: string) =>
     hour12: false,
   }).format(new Date(value));
 
+// Hora en formato 12h con AM/PM en mayúsculas (ej. "3:43 AM"), en hora de
+// Argentina. Usamos locale en-US para obtener "AM"/"PM" en vez del "a. m." de es-AR.
+export const formatTimeShort = (value: string | number | Date) =>
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: AR_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(value));
+
 export const formatDateLong = (value: string) =>
   new Intl.DateTimeFormat("es-AR", {
     timeZone: AR_TIME_ZONE,
