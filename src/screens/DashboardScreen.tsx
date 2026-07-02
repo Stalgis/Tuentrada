@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
-import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent } from "../lib/formatters";
+import { fetchGlobalStats, invalidateEventsCache, type StatsData } from "../lib/apiClient";
+import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent, formatTimeShort } from "../lib/formatters";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -30,6 +30,9 @@ const DashboardScreen = () => {
   const [thisMonthStats, setThisMonthStats] = useState<StatsData | null>(null);
   const [lastMonthStats, setLastMonthStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const refreshingRef = useRef(false);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
@@ -47,10 +50,37 @@ const DashboardScreen = () => {
       .then(([cur, prev]) => {
         setThisMonthStats(cur);
         setLastMonthStats(prev);
+        setLastUpdated(new Date());
       })
       .catch(() => {})
       .finally(() => setStatsLoading(false));
   }, [accessToken, statsLoading, thisMonthStats]);
+
+  // Refresca datos en vivo (stats + eventos) sin cerrar sesión.
+  const handleRefresh = useCallback(async () => {
+    if (!accessToken || refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    // Limpiamos la caché para forzar una lectura fresca del backend.
+    invalidateEventsCache();
+    try {
+      const [[cur, prev]] = await Promise.all([
+        Promise.all([
+          fetchGlobalStats(accessToken, "this_month"),
+          fetchGlobalStats(accessToken, "last_month"),
+        ]),
+        loadEvents(accessToken),
+      ]);
+      setThisMonthStats(cur);
+      setLastMonthStats(prev);
+      setLastUpdated(new Date());
+    } catch {
+      // Silencioso: los estados de error de eventos ya se muestran en la UI.
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }, [accessToken, loadEvents]);
 
   const upcomingEvents = useMemo(
     () =>
@@ -193,6 +223,49 @@ const DashboardScreen = () => {
                   </View>
                 ))}
               </View>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 14,
+              }}
+            >
+              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "600" }}>
+                {lastUpdated
+                  ? `Actualizado ${formatTimeShort(lastUpdated)}`
+                  : "Actualizando…"}
+              </Text>
+              <Pressable
+                onPress={handleRefresh}
+                disabled={refreshing}
+                accessibilityRole="button"
+                accessibilityLabel="Actualizar datos"
+                hitSlop={8}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  backgroundColor: palette.surfaceMuted,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderWidth: 1,
+                  borderColor: palette.hairline,
+                  opacity: refreshing ? 0.6 : 1,
+                }}
+              >
+                {refreshing ? (
+                  <ActivityIndicator size="small" color={palette.primary} />
+                ) : (
+                  <Feather name="refresh-cw" size={13} color={palette.primary} />
+                )}
+                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "700" }}>
+                  {refreshing ? "Actualizando" : "Actualizar"}
+                </Text>
+              </Pressable>
             </View>
           </SurfaceCard>
 
