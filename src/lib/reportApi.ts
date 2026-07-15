@@ -145,7 +145,12 @@ export type PaymentRow = {
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
-type EventListResponse = { resources: Record<string, string> };
+type EventListResource = { id: number | string; label: string };
+type EventListResponse = {
+  // El backend puede devolver `resources` como array de {id, label} (formato
+  // actual) o como mapa { id: "label" } (formato viejo). Soportamos ambos.
+  resources: Record<string, string> | EventListResource[];
+};
 
 export const fetchEventList = async (token: string): Promise<Event[]> => {
   const data = await apiFetch<EventListResponse>(
@@ -153,7 +158,11 @@ export const fetchEventList = async (token: string): Promise<Event[]> => {
     token,
   );
   const resources = data?.resources ?? {};
-  return Object.entries(resources).map(([id, nameDate]) => {
+  const entries: [string, string][] = Array.isArray(resources)
+    ? resources.map((r) => [String(r.id), r.label])
+    : Object.entries(resources);
+
+  return entries.map(([id, nameDate]) => {
     const dashIndex = nameDate.lastIndexOf(" - ");
     const name =
       dashIndex >= 0 ? nameDate.slice(0, dashIndex).trim() : nameDate;
