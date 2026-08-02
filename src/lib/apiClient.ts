@@ -1,4 +1,5 @@
 import type { Event, EventFunction } from "./types";
+import { currentGeneration, isCurrentGeneration } from "./session";
 import {
   fetchEventList,
   fetchStats,
@@ -19,17 +20,37 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 type CacheEntry<T> = { data: T; expiresAt: number };
 const cache = new Map<string, CacheEntry<unknown>>();
 
+/**
+ * Prefija la clave con la generación de sesión, de modo que las entradas de dos
+ * sesiones nunca puedan colisionar aunque falle una limpieza.
+ */
+const scopedKey = (key: string, gen: number): string => `${gen}::${key}`;
+
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key) as CacheEntry<T> | undefined;
   if (entry && entry.expiresAt > Date.now()) return entry.data;
   return null;
 }
 
-function setCached<T>(key: string, data: T, ttlMs: number = CACHE_TTL_MS): void {
+/** Solo escribe si la generación capturada sigue vigente. */
+function setCachedForGeneration<T>(
+  key: string,
+  data: T,
+  gen: number,
+  ttlMs: number = CACHE_TTL_MS,
+): void {
+  if (!isCurrentGeneration(gen)) return;
   cache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
-export const invalidateEventsCache = (): void => cache.clear();
+/** Limpia las tres estructuras de caché (no solo `cache`). */
+export const clearAllCaches = (): void => {
+  cache.clear();
+  historyCache.clear();
+  historyInflight.clear();
+};
+
+export const invalidateEventsCache = (): void => clearAllCaches();
 
 function groupEventsByName(flat: Event[]): Event[] {
   const order: string[] = [];
@@ -119,7 +140,8 @@ const fetchFunctionStatsMap = async (
 
 // Events enriched with per-event stats
 export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
-  const cacheKey = "events-enriched";
+  const gen = currentGeneration();
+  const cacheKey = scopedKey("events-enriched", gen);
   const cached = getCached<Event[]>(cacheKey);
   if (cached) return cached;
 
@@ -143,18 +165,19 @@ export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
   });
 
   const grouped = groupEventsByName(enrichedFlat);
-  setCached(cacheKey, grouped);
+  setCachedForGeneration(cacheKey, grouped, gen);
   return grouped;
 };
 
 export const fetchEvents = fetchEventsEnriched;
 
 export const fetchGlobalStats = async (token: string, date: string): Promise<StatsData> => {
-  const cacheKey = `global-stats-${date}`;
+  const gen = currentGeneration();
+  const cacheKey = scopedKey(`global-stats-${date}`, gen);
   const cached = getCached<StatsData>(cacheKey);
   if (cached) return cached;
   const data = await fetchStats(token, { date });
-  setCached(cacheKey, data);
+  setCachedForGeneration(cacheKey, data, gen);
   return data;
 };
 
@@ -163,20 +186,22 @@ export const fetchEventStats = async (
   eventId: string,
   date: string = "all",
 ): Promise<StatsData> => {
-  const cacheKey = `event-stats-${eventId}-${date}`;
+  const gen = currentGeneration();
+  const cacheKey = scopedKey(`event-stats-${eventId}-${date}`, gen);
   const cached = getCached<StatsData>(cacheKey);
   if (cached) return cached;
   const data = await fetchStats(token, { id: eventId, date });
-  setCached(cacheKey, data);
+  setCachedForGeneration(cacheKey, data, gen);
   return data;
 };
 
 export const fetchSectors = async (token: string, eventId: string): Promise<Sector[]> => {
-  const cacheKey = `sectors-${eventId}`;
+  const gen = currentGeneration();
+  const cacheKey = scopedKey(`sectors-${eventId}`, gen);
   const cached = getCached<Sector[]>(cacheKey);
   if (cached) return cached;
   const data = await fetchOnlineSales(token, eventId);
-  setCached(cacheKey, data);
+  setCachedForGeneration(cacheKey, data, gen);
   return data;
 };
 
@@ -189,15 +214,23 @@ type HistoryEntry = { data: HistoryResult; freshUntil: number; staleUntil: numbe
 const historyCache = new Map<string, HistoryEntry>();
 const historyInflight = new Map<string, Promise<HistoryResult>>();
 
-const historyKey = (eventId: string | undefined, date: string): string =>
-  `history-${eventId ?? "all"}-${date}`;
+// La generación forma parte de la clave: así el `finally` de una petición vieja
+// no puede borrar la entrada en vuelo de la sesión nueva.
+const historyKey = (eventId: string | undefined, date: string, gen: number): string =>
+  scopedKey(`history-${eventId ?? "all"}-${date}`, gen);
 
-const revalidateHistory = (token: string, key: string, params: ReportParams): Promise<HistoryResult> => {
+const revalidateHistory = (
+  token: string,
+  key: string,
+  params: ReportParams,
+  gen: number,
+): Promise<HistoryResult> => {
   const existing = historyInflight.get(key);
   if (existing) return existing;
 
   const p = fetchHistory(token, params)
     .then((data) => {
+      if (!isCurrentGeneration(gen)) return data; // respuesta de una sesión anterior
       const now = Date.now();
       historyCache.set(key, {
         data,
@@ -217,7 +250,8 @@ export const fetchHistoryFor = async (
   eventId: string | undefined,
   date: string = "all",
 ): Promise<HistoryResult> => {
-  const key = historyKey(eventId, date);
+  const gen = currentGeneration();
+  const key = historyKey(eventId, date, gen);
   const params: ReportParams = { date };
   if (eventId) params.id = eventId;
 
@@ -230,11 +264,11 @@ export const fetchHistoryFor = async (
 
   if (entry && entry.staleUntil > now) {
     // Serve stale immediately, refresh in background
-    revalidateHistory(token, key, params).catch(() => {});
+    revalidateHistory(token, key, params, gen).catch(() => {});
     return entry.data;
   }
 
-  return revalidateHistory(token, key, params);
+  return revalidateHistory(token, key, params, gen);
 };
 
 // ─── Payments (no cache) ─────────────────────────────────────────────────────

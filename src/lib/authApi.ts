@@ -24,10 +24,25 @@ type LoginRawResponse = {
   };
 };
 
-type LoginNeedsPasswordChangeResponse = {
-  user: User;
-  sessionToken: string;
-};
+/**
+ * El proveedor administra las contraseñas: la app no ofrece cambio de
+ * contraseña. Si un backend viejo responde 403 pidiéndolo, se corta el login
+ * sin crear sesión ni guardar ningún token.
+ */
+export class PasswordManagedByProviderError extends Error {
+  constructor() {
+    super("Tu contraseña debe ser gestionada por tu proveedor. Contactalo para continuar.");
+    this.name = "PasswordManagedByProviderError";
+  }
+}
+
+/** El backend respondió, pero rechazó las credenciales (no es un fallo de red). */
+export class AuthCredentialsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthCredentialsError";
+  }
+}
 
 const BASE_URL = env.apiUrl;
 const baseHeaders: Record<string, string> = {
@@ -54,7 +69,7 @@ const parseResponse = async (res: Response): Promise<LoginRawResponse> => {
     if (json && typeof json.message === "string") {
       message = json.message;
     }
-    throw new Error(message);
+    throw new AuthCredentialsError(message);
   }
 
   return json as LoginRawResponse;
@@ -74,34 +89,23 @@ export const authApi = {
   async login(
     email: string,
     password: string
-  ): Promise<
-    | { status: "authenticated"; tokens: AuthTokens; user: User }
-    | { status: "needsPasswordChange"; user: User; sessionToken: string }
-  > {
+  ): Promise<{ tokens: AuthTokens; user: User }> {
     const res = await fetch(`${BASE_URL}`, {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ email, password }),
     });
 
+    // Flujo antiguo de cambio de contraseña: no se crea sesión ni se lee el body.
     if (res.status === 403) {
-      const data = (await res.json()) as LoginNeedsPasswordChangeResponse;
-      return {
-        status: "needsPasswordChange",
-        user: data.user,
-        sessionToken: data.sessionToken,
-      };
+      throw new PasswordManagedByProviderError();
     }
 
     const raw = await parseResponse(res);
     const tokens = toTokens(raw);
     const user = buildUserFromEmail(raw.data.email);
 
-    return {
-      status: "authenticated",
-      tokens,
-      user,
-    };
+    return { tokens, user };
   },
 
   async refresh(refreshToken: string) {

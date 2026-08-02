@@ -1,7 +1,9 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
 import { fetchEvents, invalidateEventsCache } from '../lib/apiClient';
+import { currentGeneration, isCurrentGeneration } from '../lib/session';
+import { useAuth } from './auth';
 import type { Event, Language } from '../lib/types';
 import type { ThemeName, ThemePreference } from '../lib/theme';
 
@@ -37,10 +39,21 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     status: 'idle',
   });
 
+  // Los datos comerciales pertenecen a una sesión: al iniciar o cerrar una,
+  // el estado vuelve a 'idle' para que las pantallas recarguen desde cero.
+  const { sessionGeneration } = useAuth();
+  useEffect(() => {
+    setEvents({ data: [], status: 'idle' });
+  }, [sessionGeneration]);
+
   const loadEvents = useCallback(async (token: string) => {
     if (events.status === 'loading') {
       return;
     }
+
+    // Generación capturada antes de salir: si cambia, la respuesta se descarta
+    // en lugar de repoblar el estado de una sesión que ya terminó.
+    const gen = currentGeneration();
 
     setEvents((prev) => ({
       ...prev,
@@ -50,11 +63,13 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
 
     try {
       const response = await fetchEvents(token);
+      if (!isCurrentGeneration(gen)) return;
       setEvents({
         data: response,
         status: 'success',
       });
     } catch (error) {
+      if (!isCurrentGeneration(gen)) return;
       setEvents({
         data: [],
         status: 'error',

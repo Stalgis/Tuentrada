@@ -26,6 +26,7 @@ import {
 } from "./types";
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
+import { useSessionScreenProtection } from "../hooks/useSessionScreenProtection";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -49,6 +50,7 @@ const AuthNavigator = () => (
 const RootNavigator = () => {
   const {
     status,
+    sessionGeneration,
     shouldPromptBiometricEnrollment,
     enableBiometric,
     dismissBiometricEnrollmentPrompt,
@@ -57,6 +59,9 @@ const RootNavigator = () => {
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
   const biometricPromptOpenRef = useRef(false);
+
+  // Protección visual activa durante toda la sesión autenticada.
+  useSessionScreenProtection(status === "authenticated");
 
   useEffect(() => {
     if (!shouldPromptBiometricEnrollment || biometricPromptOpenRef.current) {
@@ -184,7 +189,9 @@ const RootNavigator = () => {
       {status === "checking" ? (
         renderSplash()
       ) : status === "authenticated" ? (
-        <AppNavigator />
+        // `key` por generación: al cambiar de sesión React desmonta todo el
+        // árbol autenticado, descartando el estado local de cada pantalla.
+        <AppNavigator key={sessionGeneration} />
       ) : (
         renderAuth()
       )}
