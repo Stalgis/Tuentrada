@@ -96,9 +96,26 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
 
-    // Flujo antiguo de cambio de contraseña: no se crea sesión ni se lee el body.
+    // Un 403 puede ser el flujo antiguo de cambio de contraseña o cualquier
+    // otro rechazo. Solo el primero muestra el mensaje del proveedor; el resto
+    // se trata como credenciales rechazadas para no dar instrucciones erróneas.
     if (res.status === 403) {
-      throw new PasswordManagedByProviderError();
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {
+        // cuerpo no-JSON: se trata como rechazo genérico
+      }
+
+      // La respuesta legacy se identifica por traer un token de cambio de
+      // contraseña. Se detecta para clasificarla, pero nunca se usa ni guarda.
+      if (payload && typeof payload.sessionToken === "string") {
+        throw new PasswordManagedByProviderError();
+      }
+
+      throw new AuthCredentialsError(
+        typeof payload?.message === "string" ? payload.message : "No se pudo autenticar",
+      );
     }
 
     const raw = await parseResponse(res);

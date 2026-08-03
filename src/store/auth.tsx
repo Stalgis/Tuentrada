@@ -20,7 +20,7 @@ import {
 } from "../lib/authApi";
 import { clearAllCaches } from "../lib/apiClient";
 import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
-import { bumpGeneration, currentGeneration } from "../lib/session";
+import { bumpGeneration, currentGeneration, isCurrentGeneration } from "../lib/session";
 import type { User } from "../lib/types";
 
 export type AuthStatus = "checking" | "unauthenticated" | "authenticated";
@@ -344,14 +344,17 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
    */
   const endSession = useCallback(
     async ({ reason }: { reason: SessionEndReason }) => {
-      const gen = currentGeneration();
-      if (endingGenerationRef.current === gen) return;
-      endingGenerationRef.current = gen;
+      // El lock apunta a la generación *resultante* del cierre: tras el bump,
+      // una segunda llamada lee esa misma generación y sale. Guardar la
+      // generación previa no serviría, porque el bump la deja obsoleta al
+      // instante y toda llamada posterior volvería a entrar.
+      if (endingGenerationRef.current === currentGeneration()) return;
 
       const tokenSnapshot = accessToken;
 
       // 1) invalidar generación y limpiar todo lo local
       const nextGen = bumpGeneration();
+      endingGenerationRef.current = nextGen;
       clearAllCaches();
       setSessionGeneration(nextGen);
       setStatus("unauthenticated");
@@ -378,8 +381,11 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [endSession]);
 
   useEffect(() => {
-    // 401 from any report API call → drop session + redirect to login
-    setOnUnauthorized(() => {
+    // 401 from any report API call → drop session + redirect to login.
+    // Se ignora si proviene de una sesión anterior: una respuesta tardía de la
+    // cuenta A no debe desconectar a la cuenta B.
+    setOnUnauthorized((gen) => {
+      if (!isCurrentGeneration(gen)) return;
       setSessionExpired(true);
       endSession({ reason: "unauthorized" });
     });

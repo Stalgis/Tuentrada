@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react-native";
 import { env } from "./env";
+import { currentGeneration } from "./session";
 import type { Event, EventStatus } from "./types";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
@@ -23,8 +24,10 @@ export class ApiError extends Error {
 // ─── Unauthorized callback ────────────────────────────────────────────────────
 // AuthProvider registers logout here so any 401 across the app triggers logout.
 
-let onUnauthorizedCallback: (() => void) | null = null;
-export const setOnUnauthorized = (cb: (() => void) | null): void => {
+// El callback recibe la generación de sesión que originó la petición, para que
+// un 401 tardío de una sesión anterior no cierre la sesión vigente.
+let onUnauthorizedCallback: ((gen: number) => void) | null = null;
+export const setOnUnauthorized = (cb: ((gen: number) => void) | null): void => {
   onUnauthorizedCallback = cb;
 };
 
@@ -60,13 +63,17 @@ const apiFetch = async <T>(
   token: string,
   params: ReportParams = {},
 ): Promise<T> => {
+  // Generación capturada antes de salir: identifica a qué sesión pertenece
+  // esta petición cuando la respuesta llegue.
+  const gen = currentGeneration();
+
   const res = await fetch(`${BASE_URL}${path}${buildQuery(params)}`, {
     method: "GET",
     headers: makeHeaders(token),
   });
 
   if (res.status === 401) {
-    onUnauthorizedCallback?.();
+    onUnauthorizedCallback?.(gen);
     throw new ApiUnauthorizedError();
   }
 
