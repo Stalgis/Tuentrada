@@ -19,7 +19,7 @@ type EventsState = {
    * porque aún no se sabe. Las pantallas deben mostrar un marcador en vez de
    * cifras, que se leerían como ventas nulas reales.
    */
-  statsPending?: boolean;
+  statsPending: boolean;
 };
 
 type AppState = {
@@ -44,6 +44,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   const [events, setEvents] = useState<EventsState>({
     data: [],
     status: 'idle',
+    statsPending: false,
   });
   const eventsRequestIdRef = useRef(0);
   const activeEventsLoadRef = useRef<{ id: number; promise: Promise<void> } | null>(null);
@@ -54,7 +55,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
-    setEvents({ data: [], status: 'idle' });
+    setEvents({ data: [], status: 'idle', statsPending: false });
   }, [sessionGeneration]);
 
   const loadEvents = useCallback((token: string, force = false): Promise<void> => {
@@ -100,6 +101,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
         setEvents({
           data: [],
           status: 'error',
+          statsPending: false,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       } finally {
@@ -120,6 +122,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     setEvents({
       data: [],
       status: 'idle',
+      statsPending: false,
     });
   }, []);
 

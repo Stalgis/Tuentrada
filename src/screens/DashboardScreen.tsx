@@ -113,7 +113,7 @@ const DashboardScreen = () => {
   const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
   // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
   // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
-  const statsPending = events.statsPending ?? false;
+  const statsPending = events.statsPending;
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>

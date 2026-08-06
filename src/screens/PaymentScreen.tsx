@@ -38,6 +38,7 @@ const PaymentScreen = () => {
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
+  const statsPending = events.statsPending;
 
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null);
@@ -346,7 +347,11 @@ const PaymentScreen = () => {
               </Text>
               <View style={{ marginTop: 14, gap: 10 }}>
                 {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => {
-                  const isInvitationOnly = fn.ticketsSold === 0 && fn.grossRevenueARS === 0;
+                  const isInvitationOnly =
+                    !statsPending &&
+                    fn.ticketsSold === 0 &&
+                    fn.grossRevenueARS === 0 &&
+                    fn.invitations > 0;
                   return (
                     <Pressable
                       key={fn.id}
@@ -368,7 +373,9 @@ const PaymentScreen = () => {
                             {formatDateLong(fn.dateISO)}
                           </Text>
                           <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                            {isInvitationOnly
+                            {statsPending
+                              ? "—"
+                              : isInvitationOnly
                               ? `${formatInteger(fn.invitations)} invitaciones`
                               : `${formatInteger(fn.ticketsSold)} entradas · ${formatCurrencyARS(fn.grossRevenueARS)}`}
                           </Text>

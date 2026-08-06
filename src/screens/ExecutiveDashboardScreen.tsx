@@ -20,6 +20,7 @@ const ExecutiveDashboardScreen = () => {
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
+  const statsPending = events.statsPending;
 
   const [ranking, setRanking] = useState<"top" | "bottom">("top");
   const {
@@ -213,7 +214,7 @@ const ExecutiveDashboardScreen = () => {
               })}
             </View>
 
-            {events.status === "loading" ? (
+            {events.status === "loading" || statsPending ? (
               <ActivityIndicator color={palette.primary} />
             ) : (
               <View style={{ gap: 10 }}>
