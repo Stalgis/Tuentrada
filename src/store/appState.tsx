@@ -13,6 +13,13 @@ type EventsState = {
   data: Event[];
   status: EventsStatus;
   error?: string;
+  /**
+   * `true` mientras los importes por función todavía están llegando: los
+   * eventos ya son listables, pero `ticketsSold` y `grossRevenueARS` valen 0
+   * porque aún no se sabe. Las pantallas deben mostrar un marcador en vez de
+   * cifras, que se leerían como ventas nulas reales.
+   */
+  statsPending?: boolean;
 };
 
 type AppState = {
@@ -57,16 +64,28 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
 
     setEvents((prev) => ({
       ...prev,
-      status: 'loading',
+      // Con datos ya en pantalla no volvemos a 'loading': al refrescar, la
+      // lista sigue visible en vez de parpadear a vacío.
+      status: prev.data.length > 0 ? prev.status : 'loading',
       error: undefined,
     }));
 
     try {
-      const response = await fetchEvents(token);
+      // El catálogo llega mucho antes que los importes; lo publicamos apenas
+      // está para que la lista se vea, y completamos al terminar el fan-out.
+      const response = await fetchEvents(token, (partial) => {
+        if (!isCurrentGeneration(gen)) return;
+        setEvents({
+          data: partial,
+          status: 'success',
+          statsPending: true,
+        });
+      });
       if (!isCurrentGeneration(gen)) return;
       setEvents({
         data: response,
         status: 'success',
+        statsPending: false,
       });
     } catch (error) {
       if (!isCurrentGeneration(gen)) return;

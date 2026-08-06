@@ -43,9 +43,10 @@ function setCachedForGeneration<T>(
   cache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
-/** Limpia las tres estructuras de caché (no solo `cache`). */
+/** Limpia todas las estructuras de caché y peticiones en vuelo (no solo `cache`). */
 export const clearAllCaches = (): void => {
   cache.clear();
+  eventsInflight.clear();
   historyCache.clear();
   historyInflight.clear();
 };
@@ -138,14 +139,31 @@ const fetchFunctionStatsMap = async (
   return out;
 };
 
-// Events enriched with per-event stats
-export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
-  const gen = currentGeneration();
-  const cacheKey = scopedKey("events-enriched", gen);
-  const cached = getCached<Event[]>(cacheKey);
-  if (cached) return cached;
+// Varias pantallas piden los eventos al montarse casi a la vez. Sin deduplicar,
+// cada una dispara su propio fan-out de una petición por función (cientos en
+// cuentas grandes). La generación forma parte de la clave, así una petición de
+// la sesión anterior nunca se comparte con la nueva.
+const eventsInflight = new Map<string, Promise<Event[]>>();
 
+/**
+ * Se invoca con los eventos ya listables (nombre, fecha y estado) apenas llega
+ * el catálogo, antes de que existan los importes. Permite pintar la pantalla en
+ * ~1s en vez de esperar una petición de stats por función.
+ */
+export type OnEventsPartial = (events: Event[]) => void;
+
+const loadEventsEnriched = async (
+  token: string,
+  gen: number,
+  cacheKey: string,
+  onPartial?: OnEventsPartial,
+): Promise<Event[]> => {
   const flatEvents = await fetchEventList(token);
+
+  if (onPartial && isCurrentGeneration(gen)) {
+    onPartial(groupEventsByName(flatEvents));
+  }
+
   const statsMap = await fetchFunctionStatsMap(
     token,
     flatEvents.map((e) => e.id),
@@ -167,6 +185,29 @@ export const fetchEventsEnriched = async (token: string): Promise<Event[]> => {
   const grouped = groupEventsByName(enrichedFlat);
   setCachedForGeneration(cacheKey, grouped, gen);
   return grouped;
+};
+
+// Events enriched with per-event stats
+export const fetchEventsEnriched = async (
+  token: string,
+  onPartial?: OnEventsPartial,
+): Promise<Event[]> => {
+  const gen = currentGeneration();
+  const cacheKey = scopedKey("events-enriched", gen);
+  const cached = getCached<Event[]>(cacheKey);
+  if (cached) return cached;
+
+  // Quien se cuelgue de una carga en curso recibe solo el resultado final: el
+  // parcial ya lo publicó el primer llamador.
+  const existing = eventsInflight.get(cacheKey);
+  if (existing) return existing;
+
+  const p = loadEventsEnriched(token, gen, cacheKey, onPartial).finally(() =>
+    eventsInflight.delete(cacheKey),
+  );
+
+  eventsInflight.set(cacheKey, p);
+  return p;
 };
 
 export const fetchEvents = fetchEventsEnriched;

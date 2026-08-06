@@ -126,6 +126,9 @@ const DashboardScreen = () => {
   const thisMonthInvitations = thisMonthStats?.invitations ?? 0;
   const ticketMedio = thisMonthStats?.ticket_medio ?? 0;
   const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
+  // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
+  // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
+  const statsPending = events.statsPending ?? false;
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
@@ -309,13 +312,13 @@ const DashboardScreen = () => {
                   <View>
                     <Text style={{ color: palette.subtext, fontSize: 11 }}>Ingresos</Text>
                     <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {formatCurrencyARS(primaryEventRevenue)}
+                      {statsPending ? "—" : formatCurrencyARS(primaryEventRevenue)}
                     </Text>
                   </View>
                   <View>
                     <Text style={{ color: palette.subtext, fontSize: 11 }}>Vendidas</Text>
                     <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {formatInteger(primaryFunction?.ticketsSold ?? 0)}
+                      {statsPending ? "—" : formatInteger(primaryFunction?.ticketsSold ?? 0)}
                     </Text>
                   </View>
                 </View>
@@ -339,12 +342,14 @@ const DashboardScreen = () => {
               </Pressable>
             </View>
             <View style={{ gap: 10, marginTop: 16 }}>
-              {events.status === "loading" ? (
+              {/* El ranking es por menor venta: sin importes el orden sería
+                  arbitrario, así que esperamos a tenerlos. */}
+              {events.status === "loading" || statsPending ? (
                 <ActivityIndicator color={palette.primary} style={{ marginVertical: 8 }} />
               ) : events.status === "error" ? (
                 <Text style={{ color: palette.danger, fontSize: 13 }}>No se pudieron cargar los eventos.</Text>
               ) : null}
-              {events.status === "success" && attentionFunctions.map((fn) => (
+              {events.status === "success" && !statsPending && attentionFunctions.map((fn) => (
                 <Pressable
                   key={fn.id}
                   onPress={() =>
@@ -377,7 +382,7 @@ const DashboardScreen = () => {
                   </View>
                 </Pressable>
               ))}
-              {events.status === "success" && attentionFunctions.length === 0 && (
+              {events.status === "success" && !statsPending && attentionFunctions.length === 0 && (
                 <Text style={{ color: palette.subtext, fontSize: 13 }}>
                   No hay funciones activas próximamente.
                 </Text>

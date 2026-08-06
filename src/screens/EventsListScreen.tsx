@@ -154,6 +154,9 @@ const EventsListScreen = () => {
         renderItem={({ item }) => {
           const fnCount = item.functions?.length ?? 1;
           const revenue = item.grossRevenueARS ?? item.ticketsSold * item.ticketPriceARS;
+          // Mientras faltan los importes mostramos un guion: un "0" se leería
+          // como que el evento no vendió nada.
+          const pending = events.statsPending;
           return (
             <Pressable
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
@@ -190,11 +193,11 @@ const EventsListScreen = () => {
                   </View>
                   <Text style={{ color: palette.hairline }}>·</Text>
                   <Text style={{ color: palette.subtext, fontSize: 12 }}>
-                    {formatInteger(item.ticketsSold)} entradas
+                    {pending ? "— entradas" : `${formatInteger(item.ticketsSold)} entradas`}
                   </Text>
                   <Text style={{ color: palette.hairline }}>·</Text>
                   <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }} numberOfLines={1}>
-                    {formatCurrencyARS(revenue)}
+                    {pending ? "—" : formatCurrencyARS(revenue)}
                   </Text>
                   <Feather name="chevron-right" size={16} color={palette.subtext} />
                 </View>
