@@ -125,6 +125,8 @@ const SalesAnalyticsScreen = () => {
     () => (selectedEvent ? [selectedEvent] : activeEvents),
     [activeEvents, selectedEvent],
   );
+  const visibleStatsUnavailable =
+    statsPending || visibleEvents.some((event) => event.statsStatus === "error");
 
   const eventOptions = useMemo(
     () => [allEventsOption, ...activeEvents.map((e) => ({ key: e.id, value: e.name }))],
@@ -205,7 +207,7 @@ const SalesAnalyticsScreen = () => {
               {selectedEvent ? "Total recaudado — todas las funciones" : "Total recaudado"}
             </Text>
             <Text style={{ color: palette.text, fontSize: 36, fontWeight: "800", marginTop: 8 }}>
-              {statsPending ? "—" : formatCurrencyARS(totalRevenue)}
+              {visibleStatsUnavailable ? "—" : formatCurrencyARS(totalRevenue)}
             </Text>
           </SurfaceCard>
 
@@ -257,13 +259,13 @@ const SalesAnalyticsScreen = () => {
               <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
                 <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                  {statsPending ? "—" : formatInteger(totalTicketsSold)}
+                  {visibleStatsUnavailable ? "—" : formatInteger(totalTicketsSold)}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Invitaciones</Text>
                 <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                  {statsPending ? "—" : formatInteger(totalInvitations)}
+                  {visibleStatsUnavailable ? "—" : formatInteger(totalInvitations)}
                 </Text>
               </View>
             </View>
@@ -368,13 +370,13 @@ const SalesAnalyticsScreen = () => {
                     </View>
                     {/* Row 2: tickets + invitations */}
                     <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>
-                      {statsPending
+                      {statsPending || fn.statsStatus === "error"
                         ? "—"
                         : `${formatInteger(fn.ticketsSold)} entradas${fn.invitations > 0 ? ` · ${formatInteger(fn.invitations)} invitaciones` : ""}`}
                     </Text>
                     {/* Row 3: revenue */}
                     <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 2 }}>
-                      {statsPending ? "—" : formatCurrencyARS(fn.grossRevenueARS)}
+                      {statsPending || fn.statsStatus === "error" ? "—" : formatCurrencyARS(fn.grossRevenueARS)}
                     </Text>
                   </Pressable>
                 ))}
@@ -404,6 +406,7 @@ const SalesAnalyticsScreen = () => {
                   <ActivityIndicator color={palette.primary} style={{ marginVertical: 8 }} />
                 ) : (
                   [...visibleEvents]
+                    .filter((event) => event.statsStatus !== "error")
                     .sort((a, b) => getEventRevenue(b) - getEventRevenue(a))
                     .map((event, index) => (
                     <Pressable

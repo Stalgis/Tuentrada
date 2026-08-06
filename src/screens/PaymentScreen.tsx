@@ -349,6 +349,7 @@ const PaymentScreen = () => {
                 {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => {
                   const isInvitationOnly =
                     !statsPending &&
+                    fn.statsStatus !== "error" &&
                     fn.ticketsSold === 0 &&
                     fn.grossRevenueARS === 0 &&
                     fn.invitations > 0;
@@ -373,7 +374,7 @@ const PaymentScreen = () => {
                             {formatDateLong(fn.dateISO)}
                           </Text>
                           <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                            {statsPending
+                            {statsPending || fn.statsStatus === "error"
                               ? "—"
                               : isInvitationOnly
                               ? `${formatInteger(fn.invitations)} invitaciones`

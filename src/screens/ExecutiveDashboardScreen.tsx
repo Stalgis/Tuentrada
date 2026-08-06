@@ -70,6 +70,7 @@ const ExecutiveDashboardScreen = () => {
   const sellingFunctions = useMemo(
     () =>
       [...allFunctions]
+        .filter((f) => f.statsStatus !== "error")
         .filter((f) => (f.grossRevenueARS ?? 0) > 0)
         .sort((a, b) => (b.grossRevenueARS ?? 0) - (a.grossRevenueARS ?? 0)),
     [allFunctions],

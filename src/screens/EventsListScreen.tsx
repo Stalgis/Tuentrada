@@ -32,7 +32,7 @@ const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => 
 
 const EventsListScreen = () => {
   const navigation = useNavigation<EventsScreenNavigationProp>();
-  const { theme, events, loadEvents } = useAppState();
+  const { theme, events, loadEvents, retryFailedStats } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
   const [query, setQuery] = useState("");
@@ -93,6 +93,36 @@ const EventsListScreen = () => {
                   <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
                     No se pudo actualizar. Mostrando los datos anteriores.
                   </Text>
+                </View>
+              ) : null}
+
+              {events.failedStatsIds.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: palette.warning,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    marginBottom: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }}>
+                    Faltan estadísticas de {events.failedStatsIds.length} funciones.
+                  </Text>
+                  <Pressable
+                    disabled={events.statsRetrying || !accessToken}
+                    onPress={() => accessToken && retryFailedStats(accessToken)}
+                  >
+                    <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "800" }}>
+                      {events.statsRetrying ? "Reintentando…" : "Reintentar"}
+                    </Text>
+                  </Pressable>
                 </View>
               ) : null}
 
@@ -174,7 +204,7 @@ const EventsListScreen = () => {
           const revenue = item.grossRevenueARS ?? item.ticketsSold * item.ticketPriceARS;
           // Mientras faltan los importes mostramos un guion: un "0" se leería
           // como que el evento no vendió nada.
-          const pending = events.statsPending;
+          const pending = events.statsPending || item.statsStatus === "error";
           return (
             <Pressable
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}

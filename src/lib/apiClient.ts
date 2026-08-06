@@ -79,7 +79,9 @@ function groupEventsByName(flat: Event[]): Event[] {
           ticketsSold: ev.ticketsSold,
           grossRevenueARS: ev.grossRevenueARS ?? 0,
           invitations: ev.invitations ?? 0,
+          statsStatus: ev.statsStatus ?? "pending",
         }],
+        statsStatus: ev.statsStatus ?? "pending",
       };
     }
 
@@ -98,10 +100,16 @@ function groupEventsByName(flat: Event[]): Event[] {
       ticketsSold: e.ticketsSold,
       grossRevenueARS: e.grossRevenueARS ?? 0,
       invitations: e.invitations ?? 0,
+      statsStatus: e.statsStatus ?? "pending",
     }));
 
     const ticketsSold = sorted.reduce((s, e) => s + e.ticketsSold, 0);
     const grossRevenueARS = sorted.reduce((s, e) => s + (e.grossRevenueARS ?? 0), 0);
+    const statsStatus = sorted.some((e) => e.statsStatus === "error")
+      ? "error"
+      : sorted.every((e) => e.statsStatus === "loaded")
+        ? "loaded"
+        : "pending";
 
     return {
       ...upcoming,
@@ -111,12 +119,15 @@ function groupEventsByName(flat: Event[]): Event[] {
       ticketsAvailable: sorted.reduce((s, e) => s + e.ticketsAvailable, 0),
       grossRevenueARS,
       ticketPriceARS: ticketsSold > 0 ? grossRevenueARS / ticketsSold : 0,
+      statsStatus,
       functions,
     };
   });
 }
 
 export type FunctionStats = { total: number; tickets: number; invitations: number };
+export type EventsLoadResult = { events: Event[]; failedIds: string[] };
+type FunctionStatsResult = { stats: Record<string, FunctionStats>; failedIds: string[] };
 
 // El backend solo expone stats por función (/stats?id=). Para tener recaudación
 // y entradas reales por función, las pedimos en paralelo (en lotes) y cacheadas.
@@ -124,28 +135,40 @@ const fetchFunctionStatsMap = async (
   token: string,
   functionIds: string[],
   date: string = "all",
-): Promise<Record<string, FunctionStats>> => {
+): Promise<FunctionStatsResult> => {
   const CONCURRENCY = 8;
   const out: Record<string, FunctionStats> = {};
+  const failedIds: string[] = [];
   for (let i = 0; i < functionIds.length; i += CONCURRENCY) {
     const batch = functionIds.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
       batch.map((id) =>
         fetchEventStats(token, id, date)
           .then((s) => ({ id, total: s.total ?? 0, tickets: s.tickets ?? 0, invitations: s.invitations ?? 0 }))
-          .catch(() => ({ id, total: 0, tickets: 0, invitations: 0 })),
+          .catch(() => null),
       ),
     );
-    for (const r of results) out[r.id] = { total: r.total, tickets: r.tickets, invitations: r.invitations };
+    for (let index = 0; index < results.length; index += 1) {
+      const result = results[index];
+      if (!result) {
+        failedIds.push(batch[index]);
+        continue;
+      }
+      out[result.id] = {
+        total: result.total,
+        tickets: result.tickets,
+        invitations: result.invitations,
+      };
+    }
   }
-  return out;
+  return { stats: out, failedIds };
 };
 
 // Varias pantallas piden los eventos al montarse casi a la vez. Sin deduplicar,
 // cada una dispara su propio fan-out de una petición por función (cientos en
 // cuentas grandes). La generación forma parte de la clave, así una petición de
 // la sesión anterior nunca se comparte con la nueva.
-const eventsInflight = new Map<string, Promise<Event[]>>();
+const eventsInflight = new Map<string, Promise<EventsLoadResult>>();
 
 /**
  * Se invoca con los eventos ya listables (nombre, fecha y estado) apenas llega
@@ -159,14 +182,14 @@ const loadEventsEnriched = async (
   gen: number,
   cacheKey: string,
   onPartial?: OnEventsPartial,
-): Promise<Event[]> => {
+): Promise<EventsLoadResult> => {
   const flatEvents = await fetchEventList(token);
 
   if (onPartial && isCurrentGeneration(gen)) {
     onPartial(groupEventsByName(flatEvents));
   }
 
-  const statsMap = await fetchFunctionStatsMap(
+  const { stats: statsMap, failedIds } = await fetchFunctionStatsMap(
     token,
     flatEvents.map((e) => e.id),
   );
@@ -181,24 +204,26 @@ const loadEventsEnriched = async (
       grossRevenueARS: revenue,
       ticketPriceARS: tickets > 0 ? revenue / tickets : 0,
       invitations: s?.invitations ?? 0,
+      statsStatus: s ? "loaded" as const : "error" as const,
     };
   });
 
   const grouped = groupEventsByName(enrichedFlat);
-  setCachedForGeneration(cacheKey, grouped, gen);
-  return grouped;
+  const result = { events: grouped, failedIds };
+  setCachedForGeneration(cacheKey, result, gen);
+  return result;
 };
 
 // Events enriched with per-event stats
 export const fetchEventsEnriched = async (
   token: string,
   onPartial?: OnEventsPartial,
-): Promise<Event[]> => {
+): Promise<EventsLoadResult> => {
   const gen = currentGeneration();
   // La versión separa un refresh forzado de cualquier carga anterior de la
   // misma sesión. Una promesa vieja puede terminar, pero escribe en otra clave.
   const cacheKey = scopedKey(`events-enriched-${eventsCacheVersion}`, gen);
-  const cached = getCached<Event[]>(cacheKey);
+  const cached = getCached<EventsLoadResult>(cacheKey);
   if (cached) return cached;
 
   // Quien se cuelgue de una carga en curso recibe solo el resultado final: el
@@ -206,7 +231,7 @@ export const fetchEventsEnriched = async (
   const existing = eventsInflight.get(cacheKey);
   if (existing) return existing;
 
-  let p: Promise<Event[]>;
+  let p: Promise<EventsLoadResult>;
   p = loadEventsEnriched(token, gen, cacheKey, onPartial).finally(() => {
     // No borrar una carga más nueva que haya reutilizado la misma clave.
     if (eventsInflight.get(cacheKey) === p) {
@@ -216,6 +241,53 @@ export const fetchEventsEnriched = async (
 
   eventsInflight.set(cacheKey, p);
   return p;
+};
+
+export const retryFailedFunctionStats = async (
+  token: string,
+  events: Event[],
+  functionIds: string[],
+): Promise<EventsLoadResult> => {
+  const gen = currentGeneration();
+  const { stats, failedIds } = await fetchFunctionStatsMap(token, functionIds);
+  const attemptedIds = new Set(functionIds);
+  const failedSet = new Set(failedIds);
+
+  const updatedEvents = events.map((event) => {
+    const functions = (event.functions ?? []).map((fn) => {
+      if (!attemptedIds.has(fn.id)) return fn;
+      const value = stats[fn.id];
+      if (!value || failedSet.has(fn.id)) {
+        return { ...fn, statsStatus: "error" as const };
+      }
+      return {
+        ...fn,
+        ticketsSold: value.tickets,
+        grossRevenueARS: value.total,
+        invitations: value.invitations,
+        statsStatus: "loaded" as const,
+      };
+    });
+
+    const hasError = functions.some((fn) => fn.statsStatus === "error");
+    const ticketsSold = functions.reduce((sum, fn) => sum + fn.ticketsSold, 0);
+    const grossRevenueARS = functions.reduce((sum, fn) => sum + fn.grossRevenueARS, 0);
+    const invitations = functions.reduce((sum, fn) => sum + fn.invitations, 0);
+    return {
+      ...event,
+      functions,
+      ticketsSold,
+      grossRevenueARS,
+      invitations,
+      ticketPriceARS: ticketsSold > 0 ? grossRevenueARS / ticketsSold : 0,
+      statsStatus: hasError ? "error" as const : "loaded" as const,
+    };
+  });
+
+  const result = { events: updatedEvents, failedIds };
+  const cacheKey = scopedKey(`events-enriched-${eventsCacheVersion}`, gen);
+  setCachedForGeneration(cacheKey, result, gen);
+  return result;
 };
 
 export const fetchEvents = fetchEventsEnriched;

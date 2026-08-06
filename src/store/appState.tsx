@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
-import { fetchEvents, invalidateEventsCache } from '../lib/apiClient';
+import { fetchEvents, invalidateEventsCache, retryFailedFunctionStats } from '../lib/apiClient';
 import { currentGeneration, isCurrentGeneration } from '../lib/session';
 import { useAuth } from './auth';
 import type { Event, Language } from '../lib/types';
@@ -20,6 +20,8 @@ type EventsState = {
    * cifras, que se leerían como ventas nulas reales.
    */
   statsPending: boolean;
+  failedStatsIds: string[];
+  statsRetrying: boolean;
 };
 
 type AppState = {
@@ -30,6 +32,7 @@ type AppState = {
   setLanguage: (lang: Language) => void;
   setTheme: (theme: ThemePreference) => void;
   loadEvents: (token: string, force?: boolean) => Promise<void>;
+  retryFailedStats: (token: string) => Promise<void>;
   clearEventsCache: () => void;
 };
 
@@ -45,10 +48,15 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     data: [],
     status: 'idle',
     statsPending: false,
+    failedStatsIds: [],
+    statsRetrying: false,
   });
   const eventsRequestIdRef = useRef(0);
   const activeEventsLoadRef = useRef<{ id: number; promise: Promise<void> } | null>(null);
   const lastSuccessfulEventsRef = useRef<Event[]>([]);
+  const failedStatsIdsRef = useRef<string[]>([]);
+  const statsRetryingRef = useRef(false);
+  const statsRetryIdRef = useRef(0);
 
   // Los datos comerciales pertenecen a una sesión: al iniciar o cerrar una,
   // el estado vuelve a 'idle' para que las pantallas recarguen desde cero.
@@ -57,7 +65,16 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
     lastSuccessfulEventsRef.current = [];
-    setEvents({ data: [], status: 'idle', statsPending: false });
+    failedStatsIdsRef.current = [];
+    statsRetryingRef.current = false;
+    statsRetryIdRef.current += 1;
+    setEvents({
+      data: [],
+      status: 'idle',
+      statsPending: false,
+      failedStatsIds: [],
+      statsRetrying: false,
+    });
   }, [sessionGeneration]);
 
   const loadEvents = useCallback((token: string, force = false): Promise<void> => {
@@ -69,6 +86,8 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     // en lugar de repoblar el estado de una sesión que ya terminó.
     const gen = currentGeneration();
     const requestId = ++eventsRequestIdRef.current;
+    statsRetryingRef.current = false;
+    statsRetryIdRef.current += 1;
     const isActive = () =>
       eventsRequestIdRef.current === requestId && isCurrentGeneration(gen);
 
@@ -90,14 +109,19 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
             data: partial,
             status: 'success',
             statsPending: true,
+            failedStatsIds: [],
+            statsRetrying: false,
           });
         });
         if (!isActive()) return;
-        lastSuccessfulEventsRef.current = response;
+        lastSuccessfulEventsRef.current = response.events;
+        failedStatsIdsRef.current = response.failedIds;
         setEvents({
-          data: response,
+          data: response.events,
           status: 'success',
           statsPending: false,
+          failedStatsIds: response.failedIds,
+          statsRetrying: false,
         });
       } catch (error) {
         if (!isActive()) return;
@@ -109,12 +133,16 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
                 data: previousData,
                 status: 'success',
                 statsPending: false,
+                failedStatsIds: failedStatsIdsRef.current,
+                statsRetrying: false,
                 error: message,
               }
             : {
                 data: [],
                 status: 'error',
                 statsPending: false,
+                failedStatsIds: [],
+                statsRetrying: false,
                 error: message,
               },
         );
@@ -129,15 +157,58 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     return promise;
   }, []);
 
+  const retryFailedStats = useCallback(async (token: string): Promise<void> => {
+    if (statsRetryingRef.current) return;
+    const functionIds = failedStatsIdsRef.current;
+    const currentEvents = lastSuccessfulEventsRef.current;
+    if (functionIds.length === 0 || currentEvents.length === 0) return;
+
+    const gen = currentGeneration();
+    const requestId = eventsRequestIdRef.current;
+    const retryId = ++statsRetryIdRef.current;
+    const isActive = () =>
+      eventsRequestIdRef.current === requestId && isCurrentGeneration(gen);
+    statsRetryingRef.current = true;
+    setEvents((prev) => ({ ...prev, statsRetrying: true, error: undefined }));
+    try {
+      const result = await retryFailedFunctionStats(token, currentEvents, functionIds);
+      if (!isActive()) return;
+      lastSuccessfulEventsRef.current = result.events;
+      failedStatsIdsRef.current = result.failedIds;
+      setEvents((prev) => ({
+        ...prev,
+        data: result.events,
+        failedStatsIds: result.failedIds,
+        statsRetrying: false,
+      }));
+    } catch (error) {
+      if (!isActive()) return;
+      setEvents((prev) => ({
+        ...prev,
+        statsRetrying: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }));
+    } finally {
+      if (statsRetryIdRef.current === retryId) {
+        statsRetryingRef.current = false;
+      }
+    }
+  }, []);
+
   const clearEventsCache = useCallback(() => {
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
     lastSuccessfulEventsRef.current = [];
+    failedStatsIdsRef.current = [];
+    statsRetryingRef.current = false;
+    statsRetryIdRef.current += 1;
     invalidateEventsCache();
     setEvents({
       data: [],
       status: 'idle',
       statsPending: false,
+      failedStatsIds: [],
+      statsRetrying: false,
     });
   }, []);
 
@@ -150,9 +221,10 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
       setLanguage,
       setTheme,
       loadEvents,
+      retryFailedStats,
       clearEventsCache,
     }),
-    [language, theme, themePreference, events, loadEvents, clearEventsCache],
+    [language, theme, themePreference, events, loadEvents, retryFailedStats, clearEventsCache],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

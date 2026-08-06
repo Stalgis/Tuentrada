@@ -24,7 +24,7 @@ type AttentionFunction = EventFunction & { eventName: string };
 
 const DashboardScreen = () => {
   const navigation = useNavigation<TabScreenNavigationProp>();
-  const { theme, events, loadEvents } = useAppState();
+  const { theme, events, loadEvents, retryFailedStats } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
 
@@ -103,6 +103,10 @@ const DashboardScreen = () => {
     }
     return all.sort((a, b) => a.ticketsSold - b.ticketsSold).slice(0, 3);
   }, [events.data]);
+  const availableAttentionFunctions = useMemo(
+    () => attentionFunctions.filter((fn) => fn.statsStatus !== "error"),
+    [attentionFunctions],
+  );
 
   const thisMonth = thisMonthStats?.total ?? 0;
   const lastMonth = lastMonthStats?.total ?? 0;
@@ -114,6 +118,7 @@ const DashboardScreen = () => {
   // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
   // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
   const statsPending = events.statsPending;
+  const primaryStatsUnavailable = statsPending || primaryFunction?.statsStatus === "error";
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
@@ -140,6 +145,35 @@ const DashboardScreen = () => {
               <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
                 No se pudo actualizar. Mostrando los datos anteriores.
               </Text>
+            </View>
+          ) : null}
+
+          {events.failedStatsIds.length > 0 ? (
+            <View
+              style={{
+                backgroundColor: palette.surfaceMuted,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: palette.warning,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }}>
+                Faltan estadísticas de {events.failedStatsIds.length} funciones.
+              </Text>
+              <Pressable
+                disabled={events.statsRetrying || !accessToken}
+                onPress={() => accessToken && retryFailedStats(accessToken)}
+              >
+                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "800" }}>
+                  {events.statsRetrying ? "Reintentando…" : "Reintentar"}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -338,13 +372,13 @@ const DashboardScreen = () => {
                   <View>
                     <Text style={{ color: palette.subtext, fontSize: 11 }}>Ingresos</Text>
                     <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {statsPending ? "—" : formatCurrencyARS(primaryEventRevenue)}
+                      {primaryStatsUnavailable ? "—" : formatCurrencyARS(primaryEventRevenue)}
                     </Text>
                   </View>
                   <View>
                     <Text style={{ color: palette.subtext, fontSize: 11 }}>Vendidas</Text>
                     <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {statsPending ? "—" : formatInteger(primaryFunction?.ticketsSold ?? 0)}
+                      {primaryStatsUnavailable ? "—" : formatInteger(primaryFunction?.ticketsSold ?? 0)}
                     </Text>
                   </View>
                 </View>
@@ -375,7 +409,7 @@ const DashboardScreen = () => {
               ) : events.status === "error" ? (
                 <Text style={{ color: palette.danger, fontSize: 13 }}>No se pudieron cargar los eventos.</Text>
               ) : null}
-              {events.status === "success" && !statsPending && attentionFunctions.map((fn) => (
+              {events.status === "success" && !statsPending && availableAttentionFunctions.map((fn) => (
                 <Pressable
                   key={fn.id}
                   onPress={() =>
@@ -408,9 +442,11 @@ const DashboardScreen = () => {
                   </View>
                 </Pressable>
               ))}
-              {events.status === "success" && !statsPending && attentionFunctions.length === 0 && (
+              {events.status === "success" && !statsPending && availableAttentionFunctions.length === 0 && (
                 <Text style={{ color: palette.subtext, fontSize: 13 }}>
-                  No hay funciones activas próximamente.
+                  {events.failedStatsIds.length > 0
+                    ? "No hay suficientes estadísticas para armar este ranking."
+                    : "No hay funciones activas próximamente."}
                 </Text>
               )}
             </View>

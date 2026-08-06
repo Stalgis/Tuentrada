@@ -44,6 +44,7 @@ const EventDetailScreen = () => {
     () => events.data.find((e) => e.id === eventId),
     [events.data, eventId],
   );
+  const eventStatsUnavailable = statsPending || event?.statsStatus === "error";
 
   const functions: EventFunction[] = useMemo(
     () => event?.functions ?? [],
@@ -101,10 +102,10 @@ const EventDetailScreen = () => {
                   Total recaudado · todas las funciones
                 </Text>
                 <Text style={{ color: palette.text, fontSize: 34, fontWeight: "800", marginTop: 8 }}>
-                  {statsPending ? "—" : formatCurrencyARS(event.grossRevenueARS ?? 0)}
+                  {eventStatsUnavailable ? "—" : formatCurrencyARS(event.grossRevenueARS ?? 0)}
                 </Text>
                 <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                  {statsPending
+                  {eventStatsUnavailable
                     ? "Estadísticas cargando…"
                     : `${formatInteger(event.ticketsSold)} entradas · ticket promedio ${formatCurrencyARS(event.ticketPriceARS)}`}
                 </Text>
@@ -153,7 +154,8 @@ const EventDetailScreen = () => {
           </Pressable>
         ) : null}
         renderItem={({ item }) => {
-          const isAllInvitations = !statsPending && item.ticketsSold === 0 && item.invitations > 0;
+          const itemStatsUnavailable = statsPending || item.statsStatus === "error";
+          const isAllInvitations = !itemStatsUnavailable && item.ticketsSold === 0 && item.invitations > 0;
           return (
             <Pressable
               onPress={() => navigation.navigate("FunctionDetail", { functionId: item.id })}
@@ -166,12 +168,12 @@ const EventDetailScreen = () => {
                       {formatDateLong(item.dateISO)}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                      {statsPending
+                      {itemStatsUnavailable
                         ? "—"
                         : `${formatInteger(item.ticketsSold)} entradas${item.invitations > 0 ? ` · ${formatInteger(item.invitations)} invitaciones` : ""}`}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
-                      {statsPending ? "—" : formatCurrencyARS(item.grossRevenueARS)}
+                      {itemStatsUnavailable ? "—" : formatCurrencyARS(item.grossRevenueARS)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 }}>

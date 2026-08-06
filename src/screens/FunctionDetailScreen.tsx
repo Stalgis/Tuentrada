@@ -132,6 +132,7 @@ const FunctionDetailScreen = () => {
   const grossRevenue = fn?.grossRevenueARS ?? 0;
   const ticketsSold = fn?.ticketsSold ?? 0;
   const avgPrice = ticketsSold > 0 ? grossRevenue / ticketsSold : 0;
+  const functionStatsUnavailable = statsPending || fn?.statsStatus === "error";
 
   if (!event || !fn) {
     return (
@@ -166,15 +167,15 @@ const FunctionDetailScreen = () => {
               Ingreso total acumulado
             </Text>
             <Text style={{ color: palette.text, fontSize: 32, fontWeight: "800", marginTop: 8 }}>
-              {statsPending ? "—" : formatCurrencyARS(grossRevenue)}
+              {functionStatsUnavailable ? "—" : formatCurrencyARS(grossRevenue)}
             </Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-              {statsPending
+              {functionStatsUnavailable
                 ? "Estadísticas cargando…"
                 : `${formatInteger(fn.ticketsSold)} entradas · ${formatInteger(fn.invitations)} invitaciones`}
             </Text>
             <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
-              {statsPending ? "Precio promedio —" : `Precio promedio ${formatCurrencyARS(avgPrice)}`}
+              {functionStatsUnavailable ? "Precio promedio —" : `Precio promedio ${formatCurrencyARS(avgPrice)}`}
             </Text>
           </SurfaceCard>
 
@@ -281,7 +282,7 @@ const FunctionDetailScreen = () => {
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <Text style={{ color: palette.subtext, fontSize: 13 }}>Entradas vendidas</Text>
                 <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>
-                  {statsPending ? "—" : formatInteger(fn.ticketsSold)}
+                  {functionStatsUnavailable ? "—" : formatInteger(fn.ticketsSold)}
                 </Text>
               </View>
               {totalCapacity > 0 && (
@@ -304,7 +305,7 @@ const FunctionDetailScreen = () => {
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <Text style={{ color: palette.subtext, fontSize: 13 }}>Ticket promedio</Text>
                 <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }}>
-                  {statsPending ? "—" : formatCurrencyARS(event.ticketPriceARS)}
+                  {functionStatsUnavailable ? "—" : formatCurrencyARS(event.ticketPriceARS)}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

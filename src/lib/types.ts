@@ -1,6 +1,7 @@
 export type Language = 'en' | 'es';
 
 export type EventStatus = 'on_sale' | 'sold_out' | 'finished';
+export type StatsStatus = 'pending' | 'loaded' | 'error';
 
 export type EventFunction = {
   id: string;
@@ -10,6 +11,7 @@ export type EventFunction = {
   grossRevenueARS: number;
   /** Invitaciones (cortesías) emitidas para la función */
   invitations: number;
+  statsStatus?: StatsStatus;
 };
 
 export type Event = {
@@ -28,6 +30,7 @@ export type Event = {
   checkInProgress?: number;
   grossRevenueARS?: number;
   invitations?: number;
+  statsStatus?: StatsStatus;
   /** Multiple showtimes/performances under the same event name */
   functions?: EventFunction[];
 };
@@ -38,4 +41,3 @@ export type User = {
   initials: string;
   email?: string;
 };
-
