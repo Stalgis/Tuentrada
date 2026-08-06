@@ -5,8 +5,8 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
 import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent } from "../lib/formatters";
+import { useGlobalStats } from "../hooks/useGlobalStats";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -21,31 +21,22 @@ const ExecutiveDashboardScreen = () => {
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
 
-  const [thisMonthStats, setThisMonthStats] = useState<StatsData | null>(null);
-  const [lastMonthStats, setLastMonthStats] = useState<StatsData | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
   const [ranking, setRanking] = useState<"top" | "bottom">("top");
+  const {
+    thisMonth: thisMonthStats,
+    lastMonth: lastMonthStats,
+    thisMonthLoading,
+    lastMonthLoading,
+    thisMonthError,
+    lastMonthError,
+    retry: retryGlobalStats,
+  } = useGlobalStats(accessToken);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
       loadEvents(accessToken);
     }
   }, [events.status, loadEvents, accessToken]);
-
-  useEffect(() => {
-    if (!accessToken || statsLoading || thisMonthStats) return;
-    setStatsLoading(true);
-    Promise.all([
-      fetchGlobalStats(accessToken, "this_month"),
-      fetchGlobalStats(accessToken, "last_month"),
-    ])
-      .then(([cur, prev]) => {
-        setThisMonthStats(cur);
-        setLastMonthStats(prev);
-      })
-      .catch(() => {})
-      .finally(() => setStatsLoading(false));
-  }, [accessToken, statsLoading, thisMonthStats]);
 
   const totalRevenue = thisMonthStats?.total ?? 0;
   const lastMonthRevenue = lastMonthStats?.total ?? 0;
@@ -108,8 +99,17 @@ const ExecutiveDashboardScreen = () => {
             <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
               Ingresos del mes
             </Text>
-            {statsLoading ? (
+            {thisMonthLoading && !thisMonthStats ? (
               <ActivityIndicator color={palette.primary} style={{ marginTop: 16, alignSelf: "flex-start" }} />
+            ) : !thisMonthStats ? (
+              <View style={{ marginTop: 12, alignItems: "flex-start", gap: 8 }}>
+                <Text style={{ color: palette.danger, fontSize: 13 }}>
+                  No se pudieron cargar los ingresos del mes.
+                </Text>
+                <Pressable onPress={retryGlobalStats}>
+                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Reintentar</Text>
+                </Pressable>
+              </View>
             ) : (
               <>
                 <Text style={{ color: palette.text, fontSize: 34, fontWeight: "800", marginTop: 10 }}>
@@ -117,7 +117,11 @@ const ExecutiveDashboardScreen = () => {
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18 }}>
                   <Text style={{ color: growthPercent >= 0 ? palette.success : palette.danger, fontSize: 13, fontWeight: "700" }}>
-                    {growthPercent >= 0 ? "+" : ""}{formatPercent(growthPercent)} vs mes anterior
+                    {lastMonthLoading
+                      ? "Cargando comparación…"
+                      : lastMonthError || !lastMonthStats
+                        ? "Mes anterior no disponible"
+                        : `${growthPercent >= 0 ? "+" : ""}${formatPercent(growthPercent)} vs mes anterior`}
                   </Text>
                   <Text style={{ color: palette.subtext, fontSize: 13 }}>
                     {formatPercent(goalProgress)} del objetivo
@@ -133,6 +137,13 @@ const ExecutiveDashboardScreen = () => {
                     }}
                   />
                 </View>
+                {(thisMonthError || lastMonthError) && (
+                  <Pressable onPress={retryGlobalStats} style={{ marginTop: 12, alignSelf: "flex-start" }}>
+                    <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "700" }}>
+                      Reintentar estadísticas
+                    </Text>
+                  </Pressable>
+                )}
               </>
             )}
           </SurfaceCard>
@@ -141,14 +152,14 @@ const ExecutiveDashboardScreen = () => {
             <SurfaceCard style={{ flex: 1 }}>
               <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
               <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                {formatInteger(ticketsSold)}
+                {thisMonthStats ? formatInteger(ticketsSold) : "—"}
               </Text>
               <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>este mes</Text>
             </SurfaceCard>
             <SurfaceCard style={{ flex: 1 }}>
               <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Compradores únicos</Text>
               <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                {formatInteger(uniqueBuyers)}
+                {thisMonthStats ? formatInteger(uniqueBuyers) : "—"}
               </Text>
               <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>este mes</Text>
             </SurfaceCard>

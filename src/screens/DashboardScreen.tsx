@@ -5,8 +5,9 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { fetchGlobalStats, invalidateEventsCache, type StatsData } from "../lib/apiClient";
+import { invalidateEventsCache } from "../lib/apiClient";
 import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent, formatTimeShort } from "../lib/formatters";
+import { useGlobalStats } from "../hooks/useGlobalStats";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -27,34 +28,24 @@ const DashboardScreen = () => {
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
 
-  const [thisMonthStats, setThisMonthStats] = useState<StatsData | null>(null);
-  const [lastMonthStats, setLastMonthStats] = useState<StatsData | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const refreshingRef = useRef(false);
+  const {
+    thisMonth: thisMonthStats,
+    lastMonth: lastMonthStats,
+    thisMonthLoading,
+    lastMonthLoading,
+    thisMonthError,
+    lastMonthError,
+    lastUpdated,
+    retry: retryGlobalStats,
+  } = useGlobalStats(accessToken);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
       loadEvents(accessToken);
     }
   }, [events.status, loadEvents, accessToken]);
-
-  useEffect(() => {
-    if (!accessToken || statsLoading || thisMonthStats) return;
-    setStatsLoading(true);
-    Promise.all([
-      fetchGlobalStats(accessToken, "this_month"),
-      fetchGlobalStats(accessToken, "last_month"),
-    ])
-      .then(([cur, prev]) => {
-        setThisMonthStats(cur);
-        setLastMonthStats(prev);
-        setLastUpdated(new Date());
-      })
-      .catch(() => {})
-      .finally(() => setStatsLoading(false));
-  }, [accessToken, statsLoading, thisMonthStats]);
 
   // Refresca datos en vivo (stats + eventos) sin cerrar sesión.
   const handleRefresh = useCallback(async () => {
@@ -64,23 +55,17 @@ const DashboardScreen = () => {
     // Limpiamos la caché para forzar una lectura fresca del backend.
     invalidateEventsCache();
     try {
-      const [[cur, prev]] = await Promise.all([
-        Promise.all([
-          fetchGlobalStats(accessToken, "this_month"),
-          fetchGlobalStats(accessToken, "last_month"),
-        ]),
+      await Promise.all([
+        retryGlobalStats(),
         loadEvents(accessToken),
       ]);
-      setThisMonthStats(cur);
-      setLastMonthStats(prev);
-      setLastUpdated(new Date());
     } catch {
       // Silencioso: los estados de error de eventos ya se muestran en la UI.
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [accessToken, loadEvents]);
+  }, [accessToken, loadEvents, retryGlobalStats]);
 
   const upcomingEvents = useMemo(
     () =>
@@ -147,8 +132,17 @@ const DashboardScreen = () => {
                 <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
                   Ingresos del mes
                 </Text>
-                {statsLoading ? (
+                {thisMonthLoading && !thisMonthStats ? (
                   <ActivityIndicator color={palette.primary} style={{ marginTop: 16, alignSelf: "flex-start" }} />
+                ) : !thisMonthStats ? (
+                  <View style={{ marginTop: 12, alignItems: "flex-start", gap: 8 }}>
+                    <Text style={{ color: palette.danger, fontSize: 13 }}>
+                      No se pudieron cargar los ingresos del mes.
+                    </Text>
+                    <Pressable onPress={retryGlobalStats}>
+                      <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Reintentar</Text>
+                    </Pressable>
+                  </View>
                 ) : (
                   <>
                     <Text
@@ -160,7 +154,11 @@ const DashboardScreen = () => {
                       {formatCurrencyARS(thisMonth)}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                      {lastMonth > 0
+                      {lastMonthLoading
+                        ? "Cargando comparación…"
+                        : lastMonthError || !lastMonthStats
+                          ? "Mes anterior no disponible"
+                          : lastMonth > 0
                         ? `${monthDeltaPercent >= 0 ? "+" : ""}${formatPercent(monthDeltaPercent)} vs mes anterior`
                         : "Sin datos del mes anterior"}
                     </Text>
@@ -182,7 +180,10 @@ const DashboardScreen = () => {
               }}
             >
               {[
-                { label: "Mes anterior", value: formatCurrencyARS(lastMonth) },
+                {
+                  label: "Mes anterior",
+                  value: lastMonthLoading || lastMonthError || !lastMonthStats ? "—" : formatCurrencyARS(lastMonth),
+                },
                 { label: "Ticket promedio", value: formatCurrencyARS(ticketMedio) },
               ].map((item) => (
                 <View
@@ -227,6 +228,14 @@ const DashboardScreen = () => {
                 ))}
               </View>
             </View>
+
+            {(thisMonthError || lastMonthError) && thisMonthStats ? (
+              <Pressable onPress={retryGlobalStats} style={{ marginTop: 10, alignSelf: "flex-start" }}>
+                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "700" }}>
+                  Reintentar estadísticas
+                </Text>
+              </Pressable>
+            ) : null}
 
             <View
               style={{
