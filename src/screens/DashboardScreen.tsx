@@ -57,7 +57,7 @@ const DashboardScreen = () => {
     try {
       await Promise.all([
         retryGlobalStats(),
-        loadEvents(accessToken),
+        loadEvents(accessToken, true),
       ]);
     } catch {
       // Silencioso: los estados de error de eventos ya se muestran en la UI.

@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
 import { fetchEvents, invalidateEventsCache } from '../lib/apiClient';
@@ -29,7 +29,7 @@ type AppState = {
   events: EventsState;
   setLanguage: (lang: Language) => void;
   setTheme: (theme: ThemePreference) => void;
-  loadEvents: (token: string) => Promise<void>;
+  loadEvents: (token: string, force?: boolean) => Promise<void>;
   clearEventsCache: () => void;
 };
 
@@ -45,22 +45,29 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     data: [],
     status: 'idle',
   });
+  const eventsRequestIdRef = useRef(0);
+  const activeEventsLoadRef = useRef<{ id: number; promise: Promise<void> } | null>(null);
 
   // Los datos comerciales pertenecen a una sesión: al iniciar o cerrar una,
   // el estado vuelve a 'idle' para que las pantallas recarguen desde cero.
   const { sessionGeneration } = useAuth();
   useEffect(() => {
+    eventsRequestIdRef.current += 1;
+    activeEventsLoadRef.current = null;
     setEvents({ data: [], status: 'idle' });
   }, [sessionGeneration]);
 
-  const loadEvents = useCallback(async (token: string) => {
-    if (events.status === 'loading') {
-      return;
+  const loadEvents = useCallback((token: string, force = false): Promise<void> => {
+    if (!force && activeEventsLoadRef.current) {
+      return activeEventsLoadRef.current.promise;
     }
 
     // Generación capturada antes de salir: si cambia, la respuesta se descarta
     // en lugar de repoblar el estado de una sesión que ya terminó.
     const gen = currentGeneration();
+    const requestId = ++eventsRequestIdRef.current;
+    const isActive = () =>
+      eventsRequestIdRef.current === requestId && isCurrentGeneration(gen);
 
     setEvents((prev) => ({
       ...prev,
@@ -70,34 +77,45 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
       error: undefined,
     }));
 
-    try {
-      // El catálogo llega mucho antes que los importes; lo publicamos apenas
-      // está para que la lista se vea, y completamos al terminar el fan-out.
-      const response = await fetchEvents(token, (partial) => {
-        if (!isCurrentGeneration(gen)) return;
-        setEvents({
-          data: partial,
-          status: 'success',
-          statsPending: true,
+    const promise = (async () => {
+      try {
+        // El catálogo llega mucho antes que los importes; lo publicamos apenas
+        // está para que la lista se vea, y completamos al terminar el fan-out.
+        const response = await fetchEvents(token, (partial) => {
+          if (!isActive()) return;
+          setEvents({
+            data: partial,
+            status: 'success',
+            statsPending: true,
+          });
         });
-      });
-      if (!isCurrentGeneration(gen)) return;
-      setEvents({
-        data: response,
-        status: 'success',
-        statsPending: false,
-      });
-    } catch (error) {
-      if (!isCurrentGeneration(gen)) return;
-      setEvents({
-        data: [],
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }, [events.status]);
+        if (!isActive()) return;
+        setEvents({
+          data: response,
+          status: 'success',
+          statsPending: false,
+        });
+      } catch (error) {
+        if (!isActive()) return;
+        setEvents({
+          data: [],
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      } finally {
+        if (activeEventsLoadRef.current?.id === requestId) {
+          activeEventsLoadRef.current = null;
+        }
+      }
+    })();
+
+    activeEventsLoadRef.current = { id: requestId, promise };
+    return promise;
+  }, []);
 
   const clearEventsCache = useCallback(() => {
+    eventsRequestIdRef.current += 1;
+    activeEventsLoadRef.current = null;
     invalidateEventsCache();
     setEvents({
       data: [],
@@ -129,4 +147,3 @@ export const useAppState = () => {
   }
   return context;
 };
-

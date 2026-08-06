@@ -19,6 +19,7 @@ export { ApiUnauthorizedError, ApiError } from "./reportApi";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 type CacheEntry<T> = { data: T; expiresAt: number };
 const cache = new Map<string, CacheEntry<unknown>>();
+let eventsCacheVersion = 0;
 
 /**
  * Prefija la clave con la generación de sesión, de modo que las entradas de dos
@@ -45,6 +46,7 @@ function setCachedForGeneration<T>(
 
 /** Limpia todas las estructuras de caché y peticiones en vuelo (no solo `cache`). */
 export const clearAllCaches = (): void => {
+  eventsCacheVersion += 1;
   cache.clear();
   eventsInflight.clear();
   historyCache.clear();
@@ -193,7 +195,9 @@ export const fetchEventsEnriched = async (
   onPartial?: OnEventsPartial,
 ): Promise<Event[]> => {
   const gen = currentGeneration();
-  const cacheKey = scopedKey("events-enriched", gen);
+  // La versión separa un refresh forzado de cualquier carga anterior de la
+  // misma sesión. Una promesa vieja puede terminar, pero escribe en otra clave.
+  const cacheKey = scopedKey(`events-enriched-${eventsCacheVersion}`, gen);
   const cached = getCached<Event[]>(cacheKey);
   if (cached) return cached;
 
@@ -202,9 +206,13 @@ export const fetchEventsEnriched = async (
   const existing = eventsInflight.get(cacheKey);
   if (existing) return existing;
 
-  const p = loadEventsEnriched(token, gen, cacheKey, onPartial).finally(() =>
-    eventsInflight.delete(cacheKey),
-  );
+  let p: Promise<Event[]>;
+  p = loadEventsEnriched(token, gen, cacheKey, onPartial).finally(() => {
+    // No borrar una carga más nueva que haya reutilizado la misma clave.
+    if (eventsInflight.get(cacheKey) === p) {
+      eventsInflight.delete(cacheKey);
+    }
+  });
 
   eventsInflight.set(cacheKey, p);
   return p;
