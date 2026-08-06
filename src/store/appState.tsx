@@ -48,6 +48,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   });
   const eventsRequestIdRef = useRef(0);
   const activeEventsLoadRef = useRef<{ id: number; promise: Promise<void> } | null>(null);
+  const lastSuccessfulEventsRef = useRef<Event[]>([]);
 
   // Los datos comerciales pertenecen a una sesión: al iniciar o cerrar una,
   // el estado vuelve a 'idle' para que las pantallas recarguen desde cero.
@@ -55,6 +56,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
+    lastSuccessfulEventsRef.current = [];
     setEvents({ data: [], status: 'idle', statsPending: false });
   }, [sessionGeneration]);
 
@@ -91,6 +93,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
           });
         });
         if (!isActive()) return;
+        lastSuccessfulEventsRef.current = response;
         setEvents({
           data: response,
           status: 'success',
@@ -98,12 +101,23 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
         });
       } catch (error) {
         if (!isActive()) return;
-        setEvents({
-          data: [],
-          status: 'error',
-          statsPending: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        const previousData = lastSuccessfulEventsRef.current;
+        setEvents(
+          previousData.length > 0
+            ? {
+                data: previousData,
+                status: 'success',
+                statsPending: false,
+                error: message,
+              }
+            : {
+                data: [],
+                status: 'error',
+                statsPending: false,
+                error: message,
+              },
+        );
       } finally {
         if (activeEventsLoadRef.current?.id === requestId) {
           activeEventsLoadRef.current = null;
@@ -118,6 +132,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   const clearEventsCache = useCallback(() => {
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
+    lastSuccessfulEventsRef.current = [];
     invalidateEventsCache();
     setEvents({
       data: [],

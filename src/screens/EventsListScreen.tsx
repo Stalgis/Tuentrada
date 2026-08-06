@@ -78,6 +78,24 @@ const EventsListScreen = () => {
             />
 
             <View style={{ paddingHorizontal: 20 }}>
+              {events.error && events.data.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: palette.warning,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
+                    No se pudo actualizar. Mostrando los datos anteriores.
+                  </Text>
+                </View>
+              ) : null}
+
               <View
                 style={{
                   backgroundColor: palette.surfaceMuted,

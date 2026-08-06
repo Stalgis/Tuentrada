@@ -126,6 +126,23 @@ const DashboardScreen = () => {
         />
 
         <View style={{ paddingHorizontal: 20, gap: 14 }}>
+          {events.error && events.data.length > 0 ? (
+            <View
+              style={{
+                backgroundColor: palette.surfaceMuted,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: palette.warning,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
+                No se pudo actualizar. Mostrando los datos anteriores.
+              </Text>
+            </View>
+          ) : null}
+
           <SurfaceCard tone="hero">
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
               <View style={{ flex: 1 }}>
