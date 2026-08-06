@@ -44,6 +44,28 @@ export class AuthCredentialsError extends Error {
   }
 }
 
+/** El backend falló procesando el login; las credenciales pueden seguir siendo válidas. */
+export class AuthServerError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "AuthServerError";
+    this.status = status;
+  }
+}
+
+/** La respuesta no cumple el contrato esperado, sin implicar credenciales inválidas. */
+export class AuthResponseError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "AuthResponseError";
+    this.status = status;
+  }
+}
+
 const BASE_URL = env.apiUrl;
 const baseHeaders: Record<string, string> = {
   "Content-Type": "application/json",
@@ -62,14 +84,30 @@ const toTokens = (raw: LoginRawResponse): AuthTokens => ({
 
 // Como tu backend envía todo envuelto bajo { success, message, data, ... }
 const parseResponse = async (res: Response): Promise<LoginRawResponse> => {
-  const json = (await res.json()) as any;
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    const message = "El servidor devolvió una respuesta inválida";
+    if (res.status >= 500) {
+      throw new AuthServerError(res.status, message);
+    }
+    throw new AuthResponseError(res.status, message);
+  }
+
+  const message =
+    typeof json?.message === "string" ? json.message : "No se pudo autenticar";
+
+  if (res.status === 401 || res.status === 403) {
+    throw new AuthCredentialsError(message);
+  }
+
+  if (res.status >= 500) {
+    throw new AuthServerError(res.status, message);
+  }
 
   if (!res.ok || json?.success === false) {
-    let message = "No se pudo autenticar";
-    if (json && typeof json.message === "string") {
-      message = json.message;
-    }
-    throw new AuthCredentialsError(message);
+    throw new AuthResponseError(res.status, message);
   }
 
   return json as LoginRawResponse;
