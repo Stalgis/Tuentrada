@@ -1,6 +1,14 @@
 // lib/authApi.tsx
 import type { User } from "./types";
 import { env } from "./env";
+import {
+  AuthCredentialsError,
+  AuthResponseError,
+  AuthServerError,
+  authErrorForStatus,
+} from "./authErrors";
+
+export { AuthCredentialsError, AuthResponseError, AuthServerError } from "./authErrors";
 
 export type AuthTokens = {
   accessToken: string;
@@ -36,36 +44,6 @@ export class PasswordManagedByProviderError extends Error {
   }
 }
 
-/** El backend respondió, pero rechazó las credenciales (no es un fallo de red). */
-export class AuthCredentialsError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "AuthCredentialsError";
-  }
-}
-
-/** El backend falló procesando el login; las credenciales pueden seguir siendo válidas. */
-export class AuthServerError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "AuthServerError";
-    this.status = status;
-  }
-}
-
-/** La respuesta no cumple el contrato esperado, sin implicar credenciales inválidas. */
-export class AuthResponseError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "AuthResponseError";
-    this.status = status;
-  }
-}
-
 const BASE_URL = env.apiUrl;
 const baseHeaders: Record<string, string> = {
   "Content-Type": "application/json",
@@ -98,15 +76,10 @@ const parseResponse = async (res: Response): Promise<LoginRawResponse> => {
   const message =
     typeof json?.message === "string" ? json.message : "No se pudo autenticar";
 
-  if (res.status === 401 || res.status === 403) {
-    throw new AuthCredentialsError(message);
-  }
+  const statusError = authErrorForStatus(res.status, message);
+  if (statusError) throw statusError;
 
-  if (res.status >= 500) {
-    throw new AuthServerError(res.status, message);
-  }
-
-  if (!res.ok || json?.success === false) {
+  if (json?.success === false) {
     throw new AuthResponseError(res.status, message);
   }
 

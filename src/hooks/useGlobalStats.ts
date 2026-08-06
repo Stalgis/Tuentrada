@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
 import { currentGeneration, isCurrentGeneration } from "../lib/session";
+import { runIndependentRequests } from "../lib/independentRequests";
 
 type GlobalStatsState = {
   thisMonth: StatsData | null;
@@ -45,8 +46,10 @@ export const useGlobalStats = (accessToken?: string) => {
       lastMonthError: null,
     }));
 
-    const thisMonthRequest = fetchGlobalStats(accessToken, "this_month")
-      .then((data) => {
+    await runIndependentRequests<StatsData>([
+      {
+        run: () => fetchGlobalStats(accessToken, "this_month"),
+        onSuccess: (data) => {
         if (!isActive()) return;
         setState((prev) => ({
           ...prev,
@@ -54,31 +57,32 @@ export const useGlobalStats = (accessToken?: string) => {
           thisMonthError: null,
           lastUpdated: new Date(),
         }));
-      })
-      .catch((error) => {
-        if (!isActive()) return;
-        setState((prev) => ({ ...prev, thisMonthError: errorMessage(error) }));
-      })
-      .finally(() => {
-        if (!isActive()) return;
-        setState((prev) => ({ ...prev, thisMonthLoading: false }));
-      });
-
-    const lastMonthRequest = fetchGlobalStats(accessToken, "last_month")
-      .then((data) => {
-        if (!isActive()) return;
-        setState((prev) => ({ ...prev, lastMonth: data, lastMonthError: null }));
-      })
-      .catch((error) => {
-        if (!isActive()) return;
-        setState((prev) => ({ ...prev, lastMonthError: errorMessage(error) }));
-      })
-      .finally(() => {
-        if (!isActive()) return;
-        setState((prev) => ({ ...prev, lastMonthLoading: false }));
-      });
-
-    await Promise.allSettled([thisMonthRequest, lastMonthRequest]);
+        },
+        onError: (error) => {
+          if (!isActive()) return;
+          setState((prev) => ({ ...prev, thisMonthError: errorMessage(error) }));
+        },
+        onSettled: () => {
+          if (!isActive()) return;
+          setState((prev) => ({ ...prev, thisMonthLoading: false }));
+        },
+      },
+      {
+        run: () => fetchGlobalStats(accessToken, "last_month"),
+        onSuccess: (data) => {
+          if (!isActive()) return;
+          setState((prev) => ({ ...prev, lastMonth: data, lastMonthError: null }));
+        },
+        onError: (error) => {
+          if (!isActive()) return;
+          setState((prev) => ({ ...prev, lastMonthError: errorMessage(error) }));
+        },
+        onSettled: () => {
+          if (!isActive()) return;
+          setState((prev) => ({ ...prev, lastMonthLoading: false }));
+        },
+      },
+    ]);
   }, [accessToken]);
 
   useEffect(() => {

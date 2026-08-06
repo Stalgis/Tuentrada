@@ -1,5 +1,7 @@
 import type { Event, EventFunction } from "./types";
 import { currentGeneration, isCurrentGeneration } from "./session";
+import { InflightRegistry } from "./InflightRegistry";
+import { applyStatsToFlatEvents, type FunctionStatsValue } from "./eventStats";
 import {
   fetchEventList,
   fetchStats,
@@ -125,7 +127,7 @@ function groupEventsByName(flat: Event[]): Event[] {
   });
 }
 
-export type FunctionStats = { total: number; tickets: number; invitations: number };
+export type FunctionStats = FunctionStatsValue;
 export type EventsLoadResult = { events: Event[]; failedIds: string[] };
 type FunctionStatsResult = { stats: Record<string, FunctionStats>; failedIds: string[] };
 
@@ -168,7 +170,7 @@ const fetchFunctionStatsMap = async (
 // cada una dispara su propio fan-out de una petición por función (cientos en
 // cuentas grandes). La generación forma parte de la clave, así una petición de
 // la sesión anterior nunca se comparte con la nueva.
-const eventsInflight = new Map<string, Promise<EventsLoadResult>>();
+const eventsInflight = new InflightRegistry<EventsLoadResult>();
 
 /**
  * Se invoca con los eventos ya listables (nombre, fecha y estado) apenas llega
@@ -194,19 +196,7 @@ const loadEventsEnriched = async (
     flatEvents.map((e) => e.id),
   );
 
-  const enrichedFlat = flatEvents.map((event) => {
-    const s = statsMap[event.id];
-    const tickets = s?.tickets ?? 0;
-    const revenue = s?.total ?? 0;
-    return {
-      ...event,
-      ticketsSold: tickets,
-      grossRevenueARS: revenue,
-      ticketPriceARS: tickets > 0 ? revenue / tickets : 0,
-      invitations: s?.invitations ?? 0,
-      statsStatus: s ? "loaded" as const : "error" as const,
-    };
-  });
+  const enrichedFlat = applyStatsToFlatEvents(flatEvents, statsMap);
 
   const grouped = groupEventsByName(enrichedFlat);
   const result = { events: grouped, failedIds };
@@ -228,19 +218,10 @@ export const fetchEventsEnriched = async (
 
   // Quien se cuelgue de una carga en curso recibe solo el resultado final: el
   // parcial ya lo publicó el primer llamador.
-  const existing = eventsInflight.get(cacheKey);
-  if (existing) return existing;
-
-  let p: Promise<EventsLoadResult>;
-  p = loadEventsEnriched(token, gen, cacheKey, onPartial).finally(() => {
-    // No borrar una carga más nueva que haya reutilizado la misma clave.
-    if (eventsInflight.get(cacheKey) === p) {
-      eventsInflight.delete(cacheKey);
-    }
-  });
-
-  eventsInflight.set(cacheKey, p);
-  return p;
+  return eventsInflight.getOrCreate(
+    cacheKey,
+    () => loadEventsEnriched(token, gen, cacheKey, onPartial),
+  );
 };
 
 export const retryFailedFunctionStats = async (
