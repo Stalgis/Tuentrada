@@ -1,30 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchGlobalStats, type StatsData } from "../lib/apiClient";
+import {
+  runIndependentRequests,
+  type IndependentRequest,
+} from "../lib/independentRequests";
 import { currentGeneration, isCurrentGeneration } from "../lib/session";
-import { runIndependentRequests } from "../lib/independentRequests";
 
-type GlobalStatsState = {
-  thisMonth: StatsData | null;
-  lastMonth: StatsData | null;
-  thisMonthLoading: boolean;
-  lastMonthLoading: boolean;
-  thisMonthError: string | null;
-  lastMonthError: string | null;
+type PeriodKey = "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth";
+
+/** Valores de `date` que entiende /report/stats, por período. */
+const PERIODS: Record<PeriodKey, string> = {
+  thisWeek: "this_week",
+  lastWeek: "last_week",
+  thisMonth: "this_month",
+  lastMonth: "last_month",
+};
+
+const PERIOD_KEYS = Object.keys(PERIODS) as PeriodKey[];
+
+type GlobalStatsState = { [K in PeriodKey]: StatsData | null } & {
+  [K in PeriodKey as `${K}Loading`]: boolean;
+} & { [K in PeriodKey as `${K}Error`]: string | null } & {
   lastUpdated: Date | null;
 };
 
 const initialState: GlobalStatsState = {
+  thisWeek: null,
+  lastWeek: null,
   thisMonth: null,
   lastMonth: null,
+  thisWeekLoading: false,
+  lastWeekLoading: false,
   thisMonthLoading: false,
   lastMonthLoading: false,
+  thisWeekError: null,
+  lastWeekError: null,
   thisMonthError: null,
   lastMonthError: null,
   lastUpdated: null,
 };
 
 const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "No se pudieron cargar las estadísticas";
+  error instanceof Error
+    ? error.message
+    : "No se pudieron cargar las estadísticas";
 
 export const useGlobalStats = (accessToken?: string) => {
   const [state, setState] = useState<GlobalStatsState>(initialState);
@@ -38,51 +57,39 @@ export const useGlobalStats = (accessToken?: string) => {
     const isActive = () =>
       requestIdRef.current === requestId && isCurrentGeneration(generation);
 
-    setState((prev) => ({
-      ...prev,
-      thisMonthLoading: true,
-      lastMonthLoading: true,
-      thisMonthError: null,
-      lastMonthError: null,
-    }));
+    setState((prev) => {
+      const next = { ...prev };
+      for (const key of PERIOD_KEYS) {
+        next[`${key}Loading`] = true;
+        next[`${key}Error`] = null;
+      }
+      return next;
+    });
 
-    await runIndependentRequests<StatsData>([
-      {
-        run: () => fetchGlobalStats(accessToken, "this_month"),
-        onSuccess: (data) => {
+    // Cada período es independiente: que uno falle o tarde no debe impedir que
+    // los demás se muestren apenas llegan.
+    const requests: IndependentRequest<StatsData>[] = PERIOD_KEYS.map((key) => ({
+      run: () => fetchGlobalStats(accessToken, PERIODS[key]),
+      onSuccess: (data) => {
         if (!isActive()) return;
         setState((prev) => ({
           ...prev,
-          thisMonth: data,
-          thisMonthError: null,
+          [key]: data,
+          [`${key}Error`]: null,
           lastUpdated: new Date(),
         }));
-        },
-        onError: (error) => {
-          if (!isActive()) return;
-          setState((prev) => ({ ...prev, thisMonthError: errorMessage(error) }));
-        },
-        onSettled: () => {
-          if (!isActive()) return;
-          setState((prev) => ({ ...prev, thisMonthLoading: false }));
-        },
       },
-      {
-        run: () => fetchGlobalStats(accessToken, "last_month"),
-        onSuccess: (data) => {
-          if (!isActive()) return;
-          setState((prev) => ({ ...prev, lastMonth: data, lastMonthError: null }));
-        },
-        onError: (error) => {
-          if (!isActive()) return;
-          setState((prev) => ({ ...prev, lastMonthError: errorMessage(error) }));
-        },
-        onSettled: () => {
-          if (!isActive()) return;
-          setState((prev) => ({ ...prev, lastMonthLoading: false }));
-        },
+      onError: (error) => {
+        if (!isActive()) return;
+        setState((prev) => ({ ...prev, [`${key}Error`]: errorMessage(error) }));
       },
-    ]);
+      onSettled: () => {
+        if (!isActive()) return;
+        setState((prev) => ({ ...prev, [`${key}Loading`]: false }));
+      },
+    }));
+
+    await runIndependentRequests<StatsData>(requests);
   }, [accessToken]);
 
   useEffect(() => {

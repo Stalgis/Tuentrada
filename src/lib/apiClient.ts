@@ -16,7 +16,7 @@ import {
 } from "./reportApi";
 
 export type { StatsData, Sector, HistoryResult, PaymentRow, ReportParams };
-export { ApiUnauthorizedError, ApiError } from "./reportApi";
+export { ApiUnauthorizedError, ApiError, ApiTimeoutError } from "./reportApi";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 type CacheEntry<T> = { data: T; expiresAt: number };

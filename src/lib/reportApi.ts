@@ -21,6 +21,18 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Sin esto, una petición que el servidor nunca contesta deja a la pantalla
+ * cargando para siempre: la promesa no se asienta y los `finally` que apagan
+ * los indicadores nunca corren.
+ */
+export class ApiTimeoutError extends Error {
+  constructor() {
+    super("El servidor tardó demasiado en responder.");
+    this.name = "ApiTimeoutError";
+  }
+}
+
 // ─── Unauthorized callback ────────────────────────────────────────────────────
 // AuthProvider registers logout here so any 401 across the app triggers logout.
 
@@ -58,6 +70,10 @@ const buildQuery = (params: ReportParams): string => {
   return out ? `?${out}` : "";
 };
 
+// Las peticiones sanas de este backend responden en 1-2s; el gateway corta a
+// los ~31s con un 504. Cortamos antes para no dejar la UI colgada medio minuto.
+const REQUEST_TIMEOUT_MS = 20_000;
+
 const apiFetch = async <T>(
   path: string,
   token: string,
@@ -67,36 +83,55 @@ const apiFetch = async <T>(
   // esta petición cuando la respuesta llegue.
   const gen = currentGeneration();
 
-  const res = await fetch(`${BASE_URL}${path}${buildQuery(params)}`, {
-    method: "GET",
-    headers: makeHeaders(token),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  if (res.status === 401) {
-    onUnauthorizedCallback?.(gen);
-    throw new ApiUnauthorizedError();
-  }
-
-  let json: any = null;
   try {
-    json = await res.json();
-  } catch {
-    throw new ApiError(res.status, "Respuesta inválida del servidor");
-  }
+    const res = await fetch(`${BASE_URL}${path}${buildQuery(params)}`, {
+      method: "GET",
+      headers: makeHeaders(token),
+      signal: controller.signal,
+    });
 
-  if (!res.ok || json?.success === false) {
-    const message =
-      typeof json?.message === "string"
-        ? json.message
-        : "Error en la solicitud";
-    const error = new ApiError(res.status, message);
-    if (res.status >= 500) {
-      Sentry.captureException(error, { extra: { path, status: res.status } });
+    if (res.status === 401) {
+      onUnauthorizedCallback?.(gen);
+      throw new ApiUnauthorizedError();
+    }
+
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      throw new ApiError(res.status, "Respuesta inválida del servidor");
+    }
+
+    if (!res.ok || json?.success === false) {
+      const message =
+        typeof json?.message === "string"
+          ? json.message
+          : "Error en la solicitud";
+      const error = new ApiError(res.status, message);
+      if (res.status >= 500) {
+        Sentry.captureException(error, { extra: { path, status: res.status } });
+      }
+      throw error;
+    }
+
+    return json.data as T;
+  } catch (error) {
+    // El abort llega como excepción del fetch: la traducimos a un error propio
+    // para que la UI pueda distinguirla y ofrecer reintentar.
+    if (controller.signal.aborted) {
+      const timeout = new ApiTimeoutError();
+      Sentry.captureException(timeout, {
+        extra: { path, date: params.date, timeoutMs: REQUEST_TIMEOUT_MS },
+      });
+      throw timeout;
     }
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return json.data as T;
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -161,7 +196,7 @@ type EventListResponse = {
 
 export const fetchEventList = async (token: string): Promise<Event[]> => {
   const data = await apiFetch<EventListResponse>(
-    "/api/v1/report/event-list",
+    "/api/v2/report/event-list",
     token,
   );
   const resources = data?.resources ?? {};

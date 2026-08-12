@@ -1,18 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { invalidateEventsCache } from "../lib/apiClient";
-import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent, formatTimeShort } from "../lib/formatters";
 import { useGlobalStats } from "../hooks/useGlobalStats";
-import { useAppState } from "../store/appState";
-import { useAuth } from "../store/auth";
+import { invalidateEventsCache } from "../lib/apiClient";
+import {
+  formatCurrencyARS,
+  formatDateTimeShort,
+  formatInteger,
+  formatPercent,
+  formatTimeShort,
+} from "../lib/formatters";
 import { getPalette } from "../lib/theme";
 import type { Event, EventFunction } from "../lib/types";
 import type { TabScreenNavigationProp } from "../navigation/types";
+import { useAppState } from "../store/appState";
+import { useAuth } from "../store/auth";
 
 const statusLabel: Record<Event["status"], string> = {
   on_sale: "En venta",
@@ -31,6 +49,12 @@ const DashboardScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
   const {
+    thisWeek: thisWeekStats,
+    lastWeek: lastWeekStats,
+    thisWeekLoading,
+    lastWeekLoading,
+    thisWeekError,
+    lastWeekError,
     thisMonth: thisMonthStats,
     lastMonth: lastMonthStats,
     thisMonthLoading,
@@ -55,10 +79,7 @@ const DashboardScreen = () => {
     // Limpiamos la caché para forzar una lectura fresca del backend.
     invalidateEventsCache();
     try {
-      await Promise.all([
-        retryGlobalStats(),
-        loadEvents(accessToken, true),
-      ]);
+      await Promise.all([retryGlobalStats(), loadEvents(accessToken, true)]);
     } catch {
       // Silencioso: los estados de error de eventos ya se muestran en la UI.
     } finally {
@@ -71,7 +92,10 @@ const DashboardScreen = () => {
     () =>
       [...events.data]
         .filter((event) => new Date(event.dateISO).getTime() >= Date.now())
-        .sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
+        ),
     [events.data],
   );
 
@@ -84,7 +108,9 @@ const DashboardScreen = () => {
     const now = Date.now();
     const upcoming = fns
       .filter((f) => new Date(f.dateISO).getTime() >= now)
-      .sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime());
+      .sort(
+        (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
+      );
     return upcoming[0] ?? fns[0];
   }, [primaryEvent]);
 
@@ -108,9 +134,11 @@ const DashboardScreen = () => {
     [attentionFunctions],
   );
 
-  const thisMonth = thisMonthStats?.total ?? 0;
+  const thisWeek = thisWeekStats?.total ?? 0;
+  const lastWeek = lastWeekStats?.total ?? 0;
+  const weekDeltaPercent =
+    lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;
   const lastMonth = lastMonthStats?.total ?? 0;
-  const monthDeltaPercent = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
   const thisMonthTickets = thisMonthStats?.tickets ?? 0;
   const thisMonthInvitations = thisMonthStats?.invitations ?? 0;
   const ticketMedio = thisMonthStats?.ticket_medio ?? 0;
@@ -118,11 +146,18 @@ const DashboardScreen = () => {
   // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
   // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
   const statsPending = events.statsPending;
-  const primaryStatsUnavailable = statsPending || primaryFunction?.statsStatus === "error";
+  const primaryStatsUnavailable =
+    statsPending || primaryFunction?.statsStatus === "error";
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={{ flex: 1, backgroundColor: palette.background }}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 34 }}
+      >
         <AppHeader
           title="Ingresos"
           pillLabel={`${upcomingEvents.length} eventos activos`}
@@ -142,7 +177,9 @@ const DashboardScreen = () => {
                 paddingVertical: 10,
               }}
             >
-              <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
+              <Text
+                style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}
+              >
                 No se pudo actualizar. Mostrando los datos anteriores.
               </Text>
             </View>
@@ -163,14 +200,27 @@ const DashboardScreen = () => {
                 gap: 12,
               }}
             >
-              <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }}>
+              <Text
+                style={{
+                  color: palette.text,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  flex: 1,
+                }}
+              >
                 Faltan estadísticas de {events.failedStatsIds.length} funciones.
               </Text>
               <Pressable
                 disabled={events.statsRetrying || !accessToken}
                 onPress={() => accessToken && retryFailedStats(accessToken)}
               >
-                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "800" }}>
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
                   {events.statsRetrying ? "Reintentando…" : "Reintentar"}
                 </Text>
               </Pressable>
@@ -178,20 +228,46 @@ const DashboardScreen = () => {
           ) : null}
 
           <SurfaceCard tone="hero">
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
               <View style={{ flex: 1 }}>
-                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
-                  Ingresos del mes
+                <Text
+                  style={{
+                    color: palette.subtext,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Ingresos de la semana
                 </Text>
-                {thisMonthLoading && !thisMonthStats ? (
-                  <ActivityIndicator color={palette.primary} style={{ marginTop: 16, alignSelf: "flex-start" }} />
-                ) : !thisMonthStats ? (
-                  <View style={{ marginTop: 12, alignItems: "flex-start", gap: 8 }}>
+                {thisWeekLoading && !thisWeekStats ? (
+                  <ActivityIndicator
+                    color={palette.primary}
+                    style={{ marginTop: 16, alignSelf: "flex-start" }}
+                  />
+                ) : thisWeekError || !thisWeekStats ? (
+                  <View
+                    style={{ marginTop: 12, alignItems: "flex-start", gap: 8 }}
+                  >
                     <Text style={{ color: palette.danger, fontSize: 13 }}>
-                      No se pudieron cargar los ingresos del mes.
+                      No se pudieron cargar los ingresos de la semana.
                     </Text>
                     <Pressable onPress={retryGlobalStats}>
-                      <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Reintentar</Text>
+                      <Text
+                        style={{
+                          color: palette.primary,
+                          fontSize: 13,
+                          fontWeight: "700",
+                        }}
+                      >
+                        Reintentar
+                      </Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -200,24 +276,44 @@ const DashboardScreen = () => {
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.6}
-                      style={{ color: palette.text, fontSize: 32, fontWeight: "800", marginTop: 8, letterSpacing: -1 }}
+                      style={{
+                        color: palette.text,
+                        fontSize: 32,
+                        fontWeight: "800",
+                        marginTop: 8,
+                        letterSpacing: -1,
+                      }}
                     >
-                      {formatCurrencyARS(thisMonth)}
+                      {formatCurrencyARS(thisWeekStats?.total ?? 0)}
                     </Text>
-                    <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                      {lastMonthLoading
+                    <Text
+                      style={{
+                        color: palette.subtext,
+                        fontSize: 13,
+                        marginTop: 4,
+                      }}
+                    >
+                      {lastWeekLoading
                         ? "Cargando comparación…"
-                        : lastMonthError || !lastMonthStats
-                          ? "Mes anterior no disponible"
-                          : lastMonth > 0
-                        ? `${monthDeltaPercent >= 0 ? "+" : ""}${formatPercent(monthDeltaPercent)} vs mes anterior`
-                        : "Sin datos del mes anterior"}
+                        : lastWeekError || !lastWeekStats
+                          ? "Semana anterior no disponible"
+                          : lastWeek > 0
+                            ? `${weekDeltaPercent >= 0 ? "+" : ""}${formatPercent(weekDeltaPercent)} vs semana anterior`
+                            : "Sin datos de la semana anterior"}
                     </Text>
                   </>
                 )}
               </View>
               <Pressable onPress={() => navigation.navigate("Analytics")}>
-                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Ver ventas</Text>
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 13,
+                    fontWeight: "700",
+                  }}
+                >
+                  Ver ventas
+                </Text>
               </Pressable>
             </View>
 
@@ -233,9 +329,18 @@ const DashboardScreen = () => {
               {[
                 {
                   label: "Mes anterior",
-                  value: lastMonthLoading || lastMonthError || !lastMonthStats ? "—" : formatCurrencyARS(lastMonth),
+                  value:
+                    lastMonthLoading || lastMonthError || !lastMonthStats
+                      ? "—"
+                      : formatCurrencyARS(lastMonth),
                 },
-                { label: "Ticket promedio", value: formatCurrencyARS(ticketMedio) },
+                {
+                  label: "Ticket promedio",
+                  value:
+                    thisMonthLoading || thisMonthError || !thisMonthStats
+                      ? "—"
+                      : formatCurrencyARS(ticketMedio),
+                },
               ].map((item) => (
                 <View
                   key={item.label}
@@ -248,30 +353,68 @@ const DashboardScreen = () => {
                     borderBottomColor: palette.hairline,
                   }}
                 >
-                  <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>
+                  <Text
+                    style={{
+                      color: palette.subtext,
+                      fontSize: 12,
+                      fontWeight: "700",
+                    }}
+                  >
                     {item.label}
                   </Text>
                   <Text
                     numberOfLines={1}
-                    style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginLeft: 12 }}
+                    style={{
+                      color: palette.text,
+                      fontSize: 15,
+                      fontWeight: "800",
+                      marginLeft: 12,
+                    }}
                   >
                     {item.value}
                   </Text>
                 </View>
               ))}
 
-              <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 10,
+                }}
+              >
                 {[
-                  { label: "Entradas", value: formatInteger(thisMonthTickets) },
-                  { label: "Invitaciones", value: formatInteger(thisMonthInvitations) },
+                  {
+                    label: "Entradas",
+                    value: thisMonthStats
+                      ? formatInteger(thisMonthTickets)
+                      : "—",
+                  },
+                  {
+                    label: "Invitaciones",
+                    value: thisMonthStats
+                      ? formatInteger(thisMonthInvitations)
+                      : "—",
+                  },
                 ].map((item) => (
                   <View key={item.label} style={{ flex: 1 }}>
-                    <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>
+                    <Text
+                      style={{
+                        color: palette.subtext,
+                        fontSize: 12,
+                        fontWeight: "700",
+                      }}
+                    >
                       {item.label}
                     </Text>
                     <Text
                       numberOfLines={1}
-                      style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 2 }}
+                      style={{
+                        color: palette.text,
+                        fontSize: 15,
+                        fontWeight: "800",
+                        marginTop: 2,
+                      }}
                     >
                       {item.value}
                     </Text>
@@ -281,8 +424,17 @@ const DashboardScreen = () => {
             </View>
 
             {(thisMonthError || lastMonthError) && thisMonthStats ? (
-              <Pressable onPress={retryGlobalStats} style={{ marginTop: 10, alignSelf: "flex-start" }}>
-                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "700" }}>
+              <Pressable
+                onPress={retryGlobalStats}
+                style={{ marginTop: 10, alignSelf: "flex-start" }}
+              >
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
                   Reintentar estadísticas
                 </Text>
               </Pressable>
@@ -296,7 +448,13 @@ const DashboardScreen = () => {
                 marginTop: 14,
               }}
             >
-              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "600" }}>
+              <Text
+                style={{
+                  color: palette.subtext,
+                  fontSize: 12,
+                  fontWeight: "600",
+                }}
+              >
                 {lastUpdated
                   ? `Actualizado ${formatTimeShort(lastUpdated)}`
                   : "Actualizando…"}
@@ -323,9 +481,19 @@ const DashboardScreen = () => {
                 {refreshing ? (
                   <ActivityIndicator size="small" color={palette.primary} />
                 ) : (
-                  <Feather name="refresh-cw" size={13} color={palette.primary} />
+                  <Feather
+                    name="refresh-cw"
+                    size={13}
+                    color={palette.primary}
+                  />
                 )}
-                <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "700" }}>
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
                   {refreshing ? "Actualizando" : "Actualizar"}
                 </Text>
               </Pressable>
@@ -333,21 +501,50 @@ const DashboardScreen = () => {
           </SurfaceCard>
 
           <SurfaceCard>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <View>
-                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Próximo evento</Text>
-                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 18,
+                    fontWeight: "800",
+                  }}
+                >
+                  Próximo evento
+                </Text>
+                <Text
+                  style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+                >
                   El siguiente evento en calendario
                 </Text>
               </View>
               <Pressable onPress={() => navigation.navigate("Events")}>
-                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Abrir catálogo</Text>
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 13,
+                    fontWeight: "700",
+                  }}
+                >
+                  Abrir catálogo
+                </Text>
               </Pressable>
             </View>
             {events.status === "loading" ? (
-              <ActivityIndicator color={palette.primary} style={{ marginTop: 20, marginBottom: 8 }} />
+              <ActivityIndicator
+                color={palette.primary}
+                style={{ marginTop: 20, marginBottom: 8 }}
+              />
             ) : events.status === "error" ? (
-              <Text style={{ color: palette.danger, fontSize: 13, marginTop: 12 }}>
+              <Text
+                style={{ color: palette.danger, fontSize: 13, marginTop: 12 }}
+              >
                 No se pudieron cargar los eventos.
               </Text>
             ) : primaryEvent ? (
@@ -362,93 +559,208 @@ const DashboardScreen = () => {
                 }
                 style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
               >
-                <View style={{ marginTop: 16, backgroundColor: palette.surfaceMuted, borderRadius: 22, padding: 16, flexDirection: "row", alignItems: "center" }}>
-                <View style={{ flex: 1 }}>
-                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>{primaryEvent.name}</Text>
-                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                  {formatDateTimeShort(primaryFunction?.dateISO ?? primaryEvent.dateISO)} · {statusLabel[primaryFunction?.status ?? primaryEvent.status]}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 18, marginTop: 14 }}>
-                  <View>
-                    <Text style={{ color: palette.subtext, fontSize: 11 }}>Ingresos</Text>
-                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {primaryStatsUnavailable ? "—" : formatCurrencyARS(primaryEventRevenue)}
+                <View
+                  style={{
+                    marginTop: 16,
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 22,
+                    padding: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: palette.text,
+                        fontSize: 18,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {primaryEvent.name}
                     </Text>
-                  </View>
-                  <View>
-                    <Text style={{ color: palette.subtext, fontSize: 11 }}>Vendidas</Text>
-                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 3 }}>
-                      {primaryStatsUnavailable ? "—" : formatInteger(primaryFunction?.ticketsSold ?? 0)}
+                    <Text
+                      style={{
+                        color: palette.subtext,
+                        fontSize: 13,
+                        marginTop: 4,
+                      }}
+                    >
+                      {formatDateTimeShort(
+                        primaryFunction?.dateISO ?? primaryEvent.dateISO,
+                      )}{" "}
+                      ·{" "}
+                      {
+                        statusLabel[
+                          primaryFunction?.status ?? primaryEvent.status
+                        ]
+                      }
                     </Text>
+                    <View
+                      style={{ flexDirection: "row", gap: 18, marginTop: 14 }}
+                    >
+                      <View>
+                        <Text style={{ color: palette.subtext, fontSize: 11 }}>
+                          Ingresos
+                        </Text>
+                        <Text
+                          style={{
+                            color: palette.text,
+                            fontSize: 15,
+                            fontWeight: "800",
+                            marginTop: 3,
+                          }}
+                        >
+                          {primaryStatsUnavailable
+                            ? "—"
+                            : formatCurrencyARS(primaryEventRevenue)}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={{ color: palette.subtext, fontSize: 11 }}>
+                          Vendidas
+                        </Text>
+                        <Text
+                          style={{
+                            color: palette.text,
+                            fontSize: 15,
+                            fontWeight: "800",
+                            marginTop: 3,
+                          }}
+                        >
+                          {primaryStatsUnavailable
+                            ? "—"
+                            : formatInteger(primaryFunction?.ticketsSold ?? 0)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-                </View>
-                <Feather name="chevron-right" size={20} color={palette.subtext} style={{ marginLeft: 12 }} />
+                  <Feather
+                    name="chevron-right"
+                    size={20}
+                    color={palette.subtext}
+                    style={{ marginLeft: 12 }}
+                  />
                 </View>
               </Pressable>
             ) : null}
           </SurfaceCard>
 
           <SurfaceCard>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Requieren atención</Text>
-                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 18,
+                    fontWeight: "800",
+                  }}
+                >
+                  Requieren atención
+                </Text>
+                <Text
+                  style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+                >
                   Funciones próximas con menor venta
                 </Text>
               </View>
-              <Pressable onPress={() => navigation.navigate("ExecutiveDashboard")}>
-                <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>Vista ejecutiva</Text>
+              <Pressable
+                onPress={() => navigation.navigate("ExecutiveDashboard")}
+              >
+                <Text
+                  style={{
+                    color: palette.primary,
+                    fontSize: 13,
+                    fontWeight: "700",
+                  }}
+                >
+                  Vista ejecutiva
+                </Text>
               </Pressable>
             </View>
             <View style={{ gap: 10, marginTop: 16 }}>
               {/* El ranking es por menor venta: sin importes el orden sería
                   arbitrario, así que esperamos a tenerlos. */}
               {events.status === "loading" || statsPending ? (
-                <ActivityIndicator color={palette.primary} style={{ marginVertical: 8 }} />
+                <ActivityIndicator
+                  color={palette.primary}
+                  style={{ marginVertical: 8 }}
+                />
               ) : events.status === "error" ? (
-                <Text style={{ color: palette.danger, fontSize: 13 }}>No se pudieron cargar los eventos.</Text>
-              ) : null}
-              {events.status === "success" && !statsPending && availableAttentionFunctions.map((fn) => (
-                <Pressable
-                  key={fn.id}
-                  onPress={() =>
-                    navigation.navigate("Events", {
-                      screen: "FunctionDetail",
-                      params: { functionId: fn.id },
-                    })
-                  }
-                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: palette.surfaceMuted,
-                      borderRadius: 18,
-                      paddingHorizontal: 14,
-                      paddingVertical: 12,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>
-                        {fn.eventName}
-                      </Text>
-                      <Text numberOfLines={1} style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                        {formatDateTimeShort(fn.dateISO)} · {formatInteger(fn.ticketsSold)} entradas
-                      </Text>
-                    </View>
-                    <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 10 }} />
-                  </View>
-                </Pressable>
-              ))}
-              {events.status === "success" && !statsPending && availableAttentionFunctions.length === 0 && (
-                <Text style={{ color: palette.subtext, fontSize: 13 }}>
-                  {events.failedStatsIds.length > 0
-                    ? "No hay suficientes estadísticas para armar este ranking."
-                    : "No hay funciones activas próximamente."}
+                <Text style={{ color: palette.danger, fontSize: 13 }}>
+                  No se pudieron cargar los eventos.
                 </Text>
-              )}
+              ) : null}
+              {events.status === "success" &&
+                !statsPending &&
+                availableAttentionFunctions.map((fn) => (
+                  <Pressable
+                    key={fn.id}
+                    onPress={() =>
+                      navigation.navigate("Events", {
+                        screen: "FunctionDetail",
+                        params: { functionId: fn.id },
+                      })
+                    }
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: palette.surfaceMuted,
+                        borderRadius: 18,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: palette.text,
+                            fontSize: 14,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {fn.eventName}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: palette.subtext,
+                            fontSize: 12,
+                            marginTop: 2,
+                          }}
+                        >
+                          {formatDateTimeShort(fn.dateISO)} ·{" "}
+                          {formatInteger(fn.ticketsSold)} entradas
+                        </Text>
+                      </View>
+                      <Feather
+                        name="chevron-right"
+                        size={16}
+                        color={palette.subtext}
+                        style={{ marginLeft: 10 }}
+                      />
+                    </View>
+                  </Pressable>
+                ))}
+              {events.status === "success" &&
+                !statsPending &&
+                availableAttentionFunctions.length === 0 && (
+                  <Text style={{ color: palette.subtext, fontSize: 13 }}>
+                    {events.failedStatsIds.length > 0
+                      ? "No hay suficientes estadísticas para armar este ranking."
+                      : "No hay funciones activas próximamente."}
+                  </Text>
+                )}
             </View>
           </SurfaceCard>
         </View>
