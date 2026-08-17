@@ -273,12 +273,17 @@ export const retryFailedFunctionStats = async (
 
 export const fetchEvents = fetchEventsEnriched;
 
-export const fetchGlobalStats = async (token: string, date: string): Promise<StatsData> => {
+export const fetchGlobalStats = async (
+  token: string,
+  eventIds: string[],
+  date: string,
+): Promise<StatsData> => {
   const gen = currentGeneration();
-  const cacheKey = scopedKey(`global-stats-${date}`, gen);
+  const idsKey = [...eventIds].sort().join(",");
+  const cacheKey = scopedKey(`global-stats-${idsKey}-${date}`, gen);
   const cached = getCached<StatsData>(cacheKey);
   if (cached) return cached;
-  const data = await fetchStats(token, { date });
+  const data = await fetchStats(token, eventIds, { date });
   setCachedForGeneration(cacheKey, data, gen);
   return data;
 };
@@ -292,7 +297,7 @@ export const fetchEventStats = async (
   const cacheKey = scopedKey(`event-stats-${eventId}-${date}`, gen);
   const cached = getCached<StatsData>(cacheKey);
   if (cached) return cached;
-  const data = await fetchStats(token, { id: eventId, date });
+  const data = await fetchStats(token, [eventId], { date });
   setCachedForGeneration(cacheKey, data, gen);
   return data;
 };
@@ -318,19 +323,29 @@ const historyInflight = new Map<string, Promise<HistoryResult>>();
 
 // La generación forma parte de la clave: así el `finally` de una petición vieja
 // no puede borrar la entrada en vuelo de la sesión nueva.
-const historyKey = (eventId: string | undefined, date: string, gen: number): string =>
-  scopedKey(`history-${eventId ?? "all"}-${date}`, gen);
+const historyKey = (
+  eventIds: string[],
+  date: string,
+  dateFrom: string | undefined,
+  dateTo: string | undefined,
+  gen: number,
+): string =>
+  scopedKey(
+    `history-${[...eventIds].sort().join(",")}-${date}-${dateFrom ?? ""}-${dateTo ?? ""}`,
+    gen,
+  );
 
 const revalidateHistory = (
   token: string,
   key: string,
+  eventIds: string[],
   params: ReportParams,
   gen: number,
 ): Promise<HistoryResult> => {
   const existing = historyInflight.get(key);
   if (existing) return existing;
 
-  const p = fetchHistory(token, params)
+  const p = fetchHistory(token, eventIds, params)
     .then((data) => {
       if (!isCurrentGeneration(gen)) return data; // respuesta de una sesión anterior
       const now = Date.now();
@@ -349,13 +364,14 @@ const revalidateHistory = (
 
 export const fetchHistoryFor = async (
   token: string,
-  eventId: string | undefined,
+  eventIds: string[],
   date: string = "all",
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<HistoryResult> => {
   const gen = currentGeneration();
-  const key = historyKey(eventId, date, gen);
-  const params: ReportParams = { date };
-  if (eventId) params.id = eventId;
+  const key = historyKey(eventIds, date, dateFrom, dateTo, gen);
+  const params: ReportParams = { date, dateFrom, dateTo };
 
   const entry = historyCache.get(key);
   const now = Date.now();
@@ -366,19 +382,19 @@ export const fetchHistoryFor = async (
 
   if (entry && entry.staleUntil > now) {
     // Serve stale immediately, refresh in background
-    revalidateHistory(token, key, params, gen).catch(() => {});
+    revalidateHistory(token, key, eventIds, params, gen).catch(() => {});
     return entry.data;
   }
 
-  return revalidateHistory(token, key, params, gen);
+  return revalidateHistory(token, key, eventIds, params, gen);
 };
 
 // ─── Payments (no cache) ─────────────────────────────────────────────────────
 
 export const fetchPaymentsForEvent = async (
   token: string,
-  eventId: string,
+  eventIds: string[],
   date: string = "all",
 ): Promise<PaymentRow[]> => {
-  return fetchPayments(token, { id: eventId, date });
+  return fetchPayments(token, eventIds, { date });
 };

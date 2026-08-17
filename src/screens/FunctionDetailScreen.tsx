@@ -90,7 +90,7 @@ const FunctionDetailScreen = () => {
     if (!accessToken) return;
     setHistoryLoading(true);
     setSelectedBarIndex(undefined);
-    fetchHistoryFor(accessToken, functionId)
+    fetchHistoryFor(accessToken, [functionId])
       .then((result) => {
         setWeekHistory(buildLastNDays(result.rows, 14));
       })

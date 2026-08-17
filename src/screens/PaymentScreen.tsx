@@ -14,14 +14,15 @@ import { getPalette } from "../lib/theme";
 import type { TabScreenNavigationProp } from "../navigation/types";
 import type { EventFunction } from "../lib/types";
 
-type PeriodKey = "all" | "today" | "this_week" | "this_month" | "last_month";
+type PeriodKey = "all" | "this_week" | "last_week";
 
-const periodOptions: { key: PeriodKey; label: string }[] = [
+const eventPeriodOptions: { key: PeriodKey; label: string }[] = [
   { key: "all", label: "Todo" },
   { key: "this_week", label: "Esta semana" },
-  { key: "this_month", label: "Este mes" },
-  { key: "last_month", label: "Mes anterior" },
+  { key: "last_week", label: "Semana anterior" },
 ];
+
+const globalPeriodOptions = eventPeriodOptions.filter((option) => option.key !== "all");
 
 const prettyName = (raw: string): string => {
   if (!raw) return "—";
@@ -42,7 +43,7 @@ const PaymentScreen = () => {
 
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null);
-  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [period, setPeriod] = useState<PeriodKey>("this_week");
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,23 +90,43 @@ const PaymentScreen = () => {
     [activeEvents],
   );
 
-  // API id: use selected function when drilling, otherwise global (undefined = all data)
-  const apiId = selectedFunctionId ?? undefined;
+  const requestIds = useMemo(() => {
+    if (selectedFunctionId) return [selectedFunctionId];
+    const sourceEvents = selectedEvent ? [selectedEvent] : events.data;
+    return [...new Set(sourceEvents.flatMap((event) =>
+      event.functions?.map((fn) => fn.id) ?? [event.id],
+    ))];
+  }, [events.data, selectedEvent, selectedFunctionId]);
+  const periodOptions = selectedEvent ? eventPeriodOptions : globalPeriodOptions;
+  const requestPeriod = !selectedEvent && period === "all" ? "this_week" : period;
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!selectedEvent && period === "all") setPeriod("this_week");
+  }, [period, selectedEvent]);
+
+  useEffect(() => {
+    if (!accessToken || requestIds.length === 0) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setShowAll(false);
     setShowAllFunctions(false);
-    fetchPaymentsForEvent(accessToken, apiId ?? "", period)
-      .then(setRows)
+    fetchPaymentsForEvent(accessToken, requestIds, requestPeriod)
+      .then((nextRows) => {
+        if (!cancelled) setRows(nextRows);
+      })
       .catch((err) => {
+        if (cancelled) return;
         setRows([]);
         setError(err instanceof Error ? err.message : "No se pudieron cargar los medios de pago.");
       })
-      .finally(() => setLoading(false));
-  }, [accessToken, apiId, period]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, requestIds, requestPeriod]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => b.sold_tickets - a.sold_tickets),
@@ -268,7 +289,7 @@ const PaymentScreen = () => {
                   if (accessToken) {
                     setLoading(true);
                     setError(null);
-                    fetchPaymentsForEvent(accessToken, apiId ?? "", period)
+                    fetchPaymentsForEvent(accessToken, requestIds, requestPeriod)
                       .then(setRows)
                       .catch((err) => setError(err instanceof Error ? err.message : "Error"))
                       .finally(() => setLoading(false));

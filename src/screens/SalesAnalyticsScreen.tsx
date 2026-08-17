@@ -21,18 +21,36 @@ const allEventsOption = { key: "all", value: "Todos los eventos" };
 const getEventRevenue = (event: Event) => event.grossRevenueARS ?? event.ticketsSold * event.ticketPriceARS;
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const AR_TIME_ZONE = "America/Argentina/Buenos_Aires";
+
+const argentinaDateKey = (daysAgo: number): string => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: AR_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const date = new Date(Date.UTC(value("year"), value("month") - 1, value("day") - daysAgo));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+};
 
 const toISOKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-const buildLastNDays = (rows: HistoryDay[], n: number): HistoryDay[] => {
+const buildLastNDays = (
+  rows: HistoryDay[],
+  n: number,
+  endDateKey?: string,
+): HistoryDay[] => {
   const map = new Map<string, HistoryDay>();
   for (const row of rows) {
     const d = parseDayDate(row.day_date);
     if (d) map.set(toISOKey(d), row);
   }
   const result: HistoryDay[] = [];
-  const today = new Date();
+  const today = (endDateKey && parseDayDate(endDateKey)) || new Date();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
     const key = toISOKey(d);
@@ -85,23 +103,50 @@ const SalesAnalyticsScreen = () => {
   const [showAllFunctions, setShowAllFunctions] = useState(false);
   const [weekHistory, setWeekHistory] = useState<HistoryDay[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) loadEvents(accessToken);
   }, [events.status, loadEvents, accessToken]);
 
+  const historyEventIds = useMemo(() => {
+    const selectedEvents = selectedEventId === "all"
+      ? events.data
+      : events.data.filter((event) => event.id === selectedEventId);
+    return [...new Set(selectedEvents.flatMap((event) =>
+      event.functions?.map((fn) => fn.id) ?? [event.id],
+    ))];
+  }, [events.data, selectedEventId]);
+
   // Fetch last 7 days of history when event selection changes
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || historyEventIds.length === 0) return;
+    let cancelled = false;
     setHistoryLoading(true);
+    setHistoryError(null);
     setSelectedBarIndex(undefined);
-    fetchHistoryFor(accessToken, undefined)
+    const dateFrom = argentinaDateKey(6);
+    const dateTo = argentinaDateKey(0);
+    fetchHistoryFor(accessToken, historyEventIds, "custom", dateFrom, dateTo)
       .then((result) => {
-        setWeekHistory(buildLastNDays(result.rows, 7));
+        if (cancelled) return;
+        setWeekHistory(buildLastNDays(result.rows, 7, dateTo));
       })
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false));
-  }, [accessToken, selectedEventId]);
+      .catch((error) => {
+        if (cancelled) return;
+        setWeekHistory([]);
+        setHistoryError(
+          error instanceof Error ? error.message : "No se pudieron cargar los últimos 7 días.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, historyEventIds]);
 
   const activeEvents = useMemo(
     () => events.data.filter((event) => event.status !== "finished"),
@@ -279,6 +324,10 @@ const SalesAnalyticsScreen = () => {
             </Text>
             {historyLoading ? (
               <ActivityIndicator color={palette.primary} style={{ marginTop: 24, marginBottom: 8 }} />
+            ) : historyError ? (
+              <Text style={{ color: palette.danger, fontSize: 13, marginTop: 16 }}>
+                {historyError}
+              </Text>
             ) : weeklyTrend.length > 0 ? (
               <>
                 <MiniBarChart

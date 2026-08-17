@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { useGlobalStats } from "../hooks/useGlobalStats";
+import { useGlobalStats, WEEK_PERIODS } from "../hooks/useGlobalStats";
 import { invalidateEventsCache } from "../lib/apiClient";
 import {
   formatCurrencyARS,
@@ -45,6 +45,12 @@ const DashboardScreen = () => {
   const { theme, events, loadEvents, retryFailedStats } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
+  const eventIds = useMemo(
+    () => [...new Set(events.data.flatMap((event) =>
+      event.functions?.map((fn) => fn.id) ?? [event.id],
+    ))],
+    [events.data],
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
@@ -55,15 +61,9 @@ const DashboardScreen = () => {
     lastWeekLoading,
     thisWeekError,
     lastWeekError,
-    thisMonth: thisMonthStats,
-    lastMonth: lastMonthStats,
-    thisMonthLoading,
-    lastMonthLoading,
-    thisMonthError,
-    lastMonthError,
     lastUpdated,
     retry: retryGlobalStats,
-  } = useGlobalStats(accessToken);
+  } = useGlobalStats(accessToken, WEEK_PERIODS, eventIds);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
@@ -138,10 +138,9 @@ const DashboardScreen = () => {
   const lastWeek = lastWeekStats?.total ?? 0;
   const weekDeltaPercent =
     lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;
-  const lastMonth = lastMonthStats?.total ?? 0;
-  const thisMonthTickets = thisMonthStats?.tickets ?? 0;
-  const thisMonthInvitations = thisMonthStats?.invitations ?? 0;
-  const ticketMedio = thisMonthStats?.ticket_medio ?? 0;
+  const thisWeekTickets = thisWeekStats?.tickets ?? 0;
+  const thisWeekInvitations = thisWeekStats?.invitations ?? 0;
+  const ticketMedio = thisWeekStats?.ticket_medio ?? 0;
   const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
   // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
   // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
@@ -328,16 +327,16 @@ const DashboardScreen = () => {
             >
               {[
                 {
-                  label: "Mes anterior",
+                  label: "Semana anterior",
                   value:
-                    lastMonthLoading || lastMonthError || !lastMonthStats
+                    lastWeekLoading || lastWeekError || !lastWeekStats
                       ? "—"
-                      : formatCurrencyARS(lastMonth),
+                      : formatCurrencyARS(lastWeek),
                 },
                 {
                   label: "Ticket promedio",
                   value:
-                    thisMonthLoading || thisMonthError || !thisMonthStats
+                    thisWeekLoading || thisWeekError || !thisWeekStats
                       ? "—"
                       : formatCurrencyARS(ticketMedio),
                 },
@@ -386,14 +385,14 @@ const DashboardScreen = () => {
                 {[
                   {
                     label: "Entradas",
-                    value: thisMonthStats
-                      ? formatInteger(thisMonthTickets)
+                    value: thisWeekStats
+                      ? formatInteger(thisWeekTickets)
                       : "—",
                   },
                   {
                     label: "Invitaciones",
-                    value: thisMonthStats
-                      ? formatInteger(thisMonthInvitations)
+                    value: thisWeekStats
+                      ? formatInteger(thisWeekInvitations)
                       : "—",
                   },
                 ].map((item) => (
@@ -423,7 +422,7 @@ const DashboardScreen = () => {
               </View>
             </View>
 
-            {(thisMonthError || lastMonthError) && thisMonthStats ? (
+            {(thisWeekError || lastWeekError) && thisWeekStats ? (
               <Pressable
                 onPress={retryGlobalStats}
                 style={{ marginTop: 10, alignSelf: "flex-start" }}

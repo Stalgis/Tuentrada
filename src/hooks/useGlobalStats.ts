@@ -6,7 +6,9 @@ import {
 } from "../lib/independentRequests";
 import { currentGeneration, isCurrentGeneration } from "../lib/session";
 
-type PeriodKey = "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth";
+export type PeriodKey = "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth";
+export const WEEK_PERIODS = ["thisWeek", "lastWeek"] as const;
+export const MONTH_PERIODS = ["thisMonth", "lastMonth"] as const;
 
 /** Valores de `date` que entiende /report/stats, por período. */
 const PERIODS: Record<PeriodKey, string> = {
@@ -15,8 +17,6 @@ const PERIODS: Record<PeriodKey, string> = {
   thisMonth: "this_month",
   lastMonth: "last_month",
 };
-
-const PERIOD_KEYS = Object.keys(PERIODS) as PeriodKey[];
 
 type GlobalStatsState = { [K in PeriodKey]: StatsData | null } & {
   [K in PeriodKey as `${K}Loading`]: boolean;
@@ -45,12 +45,16 @@ const errorMessage = (error: unknown): string =>
     ? error.message
     : "No se pudieron cargar las estadísticas";
 
-export const useGlobalStats = (accessToken?: string) => {
+export const useGlobalStats = (
+  accessToken?: string,
+  periodKeys: readonly PeriodKey[] = MONTH_PERIODS,
+  eventIds: readonly string[] = [],
+) => {
   const [state, setState] = useState<GlobalStatsState>(initialState);
   const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || eventIds.length === 0) return;
 
     const requestId = ++requestIdRef.current;
     const generation = currentGeneration();
@@ -59,7 +63,7 @@ export const useGlobalStats = (accessToken?: string) => {
 
     setState((prev) => {
       const next = { ...prev };
-      for (const key of PERIOD_KEYS) {
+      for (const key of periodKeys) {
         next[`${key}Loading`] = true;
         next[`${key}Error`] = null;
       }
@@ -68,15 +72,15 @@ export const useGlobalStats = (accessToken?: string) => {
 
     // Cada período es independiente: que uno falle o tarde no debe impedir que
     // los demás se muestren apenas llegan.
-    const requests: IndependentRequest<StatsData>[] = PERIOD_KEYS.map((key) => ({
-      run: () => fetchGlobalStats(accessToken, PERIODS[key]),
+    const requests: IndependentRequest<StatsData>[] = periodKeys.map((key) => ({
+      run: () => fetchGlobalStats(accessToken, [...eventIds], PERIODS[key]),
       onSuccess: (data) => {
         if (!isActive()) return;
         setState((prev) => ({
           ...prev,
           [key]: data,
           [`${key}Error`]: null,
-          lastUpdated: new Date(),
+          lastUpdated: key === periodKeys[0] ? new Date() : prev.lastUpdated,
         }));
       },
       onError: (error) => {
@@ -90,17 +94,17 @@ export const useGlobalStats = (accessToken?: string) => {
     }));
 
     await runIndependentRequests<StatsData>(requests);
-  }, [accessToken]);
+  }, [accessToken, eventIds, periodKeys]);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!accessToken || eventIds.length === 0) {
       requestIdRef.current += 1;
       setState(initialState);
       return;
     }
 
     load();
-  }, [accessToken, load]);
+  }, [accessToken, eventIds.length, load]);
 
   return { ...state, retry: load };
 };

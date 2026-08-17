@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/react-native";
 import { env } from "./env";
 import { currentGeneration } from "./session";
 import type { Event, EventStatus } from "./types";
+import { backendFetch } from "./backendFetch";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,9 @@ const makeHeaders = (token: string): Record<string, string> => ({
 export type ReportParams = {
   id?: string;
   date?: string;
-  // Only used when date === "custom"
+  // Only used when date === "custom". `dTo` remains for legacy callers.
+  dateFrom?: string;
+  dateTo?: string;
   dTo?: string;
 };
 
@@ -65,6 +68,10 @@ const buildQuery = (params: ReportParams): string => {
   const qs = new URLSearchParams();
   if (params.id != null && params.id !== "") qs.set("id", params.id);
   if (params.date) qs.set("date", params.date);
+  if (params.date === "custom" && params.dateFrom)
+    qs.set("dateFrom", params.dateFrom);
+  if (params.date === "custom" && params.dateTo)
+    qs.set("dateTo", params.dateTo);
   if (params.date === "custom" && params.dTo) qs.set("dTo", params.dTo);
   const out = qs.toString();
   return out ? `?${out}` : "";
@@ -78,6 +85,7 @@ const apiFetch = async <T>(
   path: string,
   token: string,
   params: ReportParams = {},
+  request: { method?: "GET" | "POST"; body?: unknown } = {},
 ): Promise<T> => {
   // Generación capturada antes de salir: identifica a qué sesión pertenece
   // esta petición cuando la respuesta llegue.
@@ -87,9 +95,11 @@ const apiFetch = async <T>(
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${BASE_URL}${path}${buildQuery(params)}`, {
-      method: "GET",
+    const res = await backendFetch(`${BASE_URL}${path}${buildQuery(params)}`, {
+      method: request.method ?? "GET",
       headers: makeHeaders(token),
+      body:
+        request.body === undefined ? undefined : JSON.stringify(request.body),
       signal: controller.signal,
     });
 
@@ -185,6 +195,12 @@ export type PaymentRow = {
   total_revenue: number;
 };
 
+const normalizeIds = (ids: string[]): (string | number)[] =>
+  [...new Set(ids)].map((id) => {
+    const numericId = Number(id);
+    return Number.isSafeInteger(numericId) ? numericId : id;
+  });
+
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 type EventListResource = { id: number | string; label: string };
@@ -227,12 +243,15 @@ export const fetchEventList = async (token: string): Promise<Event[]> => {
 
 export const fetchStats = async (
   token: string,
+  ids: string[],
   params: ReportParams = {},
 ): Promise<StatsData> => {
+  const normalizedIds = normalizeIds(ids);
   const data = await apiFetch<{ stats: StatsData }>(
-    "/api/v1/report/stats",
+    "/api/v2/report/stats",
     token,
     params,
+    { method: "POST", body: { ids: normalizedIds } },
   );
   return data.stats;
 };
@@ -242,7 +261,7 @@ export const fetchOnlineSales = async (
   eventId: string,
 ): Promise<Sector[]> => {
   const data = await apiFetch<{ "online-sales": Sector[] }>(
-    "/api/v1/report/online-sales",
+    "/api/v2/report/online-sales",
     token,
     { id: eventId },
   );
@@ -251,12 +270,15 @@ export const fetchOnlineSales = async (
 
 export const fetchHistory = async (
   token: string,
+  ids: string[],
   params: ReportParams = {},
 ): Promise<HistoryResult> => {
+  const normalizedIds = normalizeIds(ids);
   const data = await apiFetch<{ history: HistoryDay[] }>(
-    "/api/v1/report/history",
+    "/api/v2/report/history",
     token,
     params,
+    { method: "POST", body: { ids: normalizedIds } },
   );
   const all = data?.history ?? [];
   const totalIdx = all.findIndex((row) => row.day_formatted === "TOTAL");
@@ -273,12 +295,15 @@ type PaymentRowRaw = {
 
 export const fetchPayments = async (
   token: string,
+  ids: string[],
   params: ReportParams = {},
 ): Promise<PaymentRow[]> => {
+  const normalizedIds = normalizeIds(ids);
   const data = await apiFetch<{ payments: PaymentRowRaw[] }>(
-    "/api/v1/report/payments",
+    "/api/v2/report/payments",
     token,
     params,
+    { method: "POST", body: { ids: normalizedIds } },
   );
   const payments = data?.payments ?? [];
   return payments.map((p) => ({
@@ -295,7 +320,7 @@ export const fetchPayments = async (
 
 export const logoutApi = async (token: string): Promise<void> => {
   try {
-    await fetch(`${BASE_URL}/api/v1/logout`, {
+    await backendFetch(`${BASE_URL}/api/v1/logout`, {
       method: "POST",
       headers: makeHeaders(token),
     });

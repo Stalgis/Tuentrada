@@ -1,6 +1,7 @@
 // lib/authApi.tsx
 import type { User } from "./types";
 import { env } from "./env";
+import { backendFetch } from "./backendFetch";
 import {
   AuthCredentialsError,
   AuthResponseError,
@@ -101,7 +102,7 @@ export const authApi = {
     email: string,
     password: string
   ): Promise<{ tokens: AuthTokens; user: User }> {
-    const res = await fetch(`${BASE_URL}`, {
+    const res = await backendFetch(`${BASE_URL}`, {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ email, password }),
@@ -141,7 +142,7 @@ export const authApi = {
     // o que llame a otro endpoint cuando exista.
     // De momento, si alguien lo llama, va a tirar error y el bootstrapAuth
     // te va a mandar a "unauthenticated".
-    const res = await fetch(`${BASE_URL}/refresh`, {
+    const res = await backendFetch(`${BASE_URL}/refresh`, {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ refreshToken }),

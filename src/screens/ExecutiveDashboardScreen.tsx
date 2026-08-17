@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
 import { formatCurrencyARS, formatDateTimeShort, formatInteger, formatPercent } from "../lib/formatters";
-import { useGlobalStats } from "../hooks/useGlobalStats";
+import { MONTH_PERIODS, useGlobalStats } from "../hooks/useGlobalStats";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -21,6 +21,12 @@ const ExecutiveDashboardScreen = () => {
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
   const statsPending = events.statsPending;
+  const eventIds = useMemo(
+    () => [...new Set(events.data.flatMap((event) =>
+      event.functions?.map((fn) => fn.id) ?? [event.id],
+    ))],
+    [events.data],
+  );
 
   const [ranking, setRanking] = useState<"top" | "bottom">("top");
   const {
@@ -31,7 +37,7 @@ const ExecutiveDashboardScreen = () => {
     thisMonthError,
     lastMonthError,
     retry: retryGlobalStats,
-  } = useGlobalStats(accessToken);
+  } = useGlobalStats(accessToken, MONTH_PERIODS, eventIds);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
