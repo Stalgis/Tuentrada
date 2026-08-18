@@ -204,7 +204,7 @@ const EventsListScreen = () => {
           const revenue = item.grossRevenueARS ?? item.ticketsSold * item.ticketPriceARS;
           // Mientras faltan los importes mostramos un guion: un "0" se leería
           // como que el evento no vendió nada.
-          const pending = events.statsPending || item.statsStatus === "error";
+          const pending = item.statsStatus !== "loaded";
           return (
             <Pressable
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}

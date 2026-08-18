@@ -6,12 +6,13 @@ import {
 } from "../lib/independentRequests";
 import { currentGeneration, isCurrentGeneration } from "../lib/session";
 
-export type PeriodKey = "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth";
-export const WEEK_PERIODS = ["thisWeek", "lastWeek"] as const;
+export type PeriodKey = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth";
+export const DASHBOARD_PERIODS = ["all"] as const;
 export const MONTH_PERIODS = ["thisMonth", "lastMonth"] as const;
 
 /** Valores de `date` que entiende /report/stats, por período. */
 const PERIODS: Record<PeriodKey, string> = {
+  all: "all",
   thisWeek: "this_week",
   lastWeek: "last_week",
   thisMonth: "this_month",
@@ -25,14 +26,17 @@ type GlobalStatsState = { [K in PeriodKey]: StatsData | null } & {
 };
 
 const initialState: GlobalStatsState = {
+  all: null,
   thisWeek: null,
   lastWeek: null,
   thisMonth: null,
   lastMonth: null,
+  allLoading: false,
   thisWeekLoading: false,
   lastWeekLoading: false,
   thisMonthLoading: false,
   lastMonthLoading: false,
+  allError: null,
   thisWeekError: null,
   lastWeekError: null,
   thisMonthError: null,

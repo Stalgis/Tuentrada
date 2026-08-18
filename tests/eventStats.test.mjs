@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyStatsToFlatEvents } from "../src/lib/eventStats.ts";
+import {
+  applyStatsProgressToFlatEvents,
+  applyStatsToFlatEvents,
+} from "../src/lib/eventStats.ts";
 
 const event = (id) => ({
   id,
@@ -30,4 +33,17 @@ test("distingue estadísticas reales de funciones fallidas", () => {
     { status: "loaded", total: 25000, tickets: 10, invitations: 2 },
   );
   assert.equal(result[1].statsStatus, "error");
+});
+
+test("publica stats disponibles sin marcar como fallidas las pendientes", () => {
+  const result = applyStatsProgressToFlatEvents(
+    [event("loaded"), event("pending"), event("failed")],
+    { loaded: { total: 12000, tickets: 4, invitations: 1 } },
+    ["failed"],
+  );
+
+  assert.equal(result[0].statsStatus, "loaded");
+  assert.equal(result[0].grossRevenueARS, 12000);
+  assert.equal(result[1].statsStatus, undefined);
+  assert.equal(result[2].statsStatus, "error");
 });

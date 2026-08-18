@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/react-native";
 import { env } from "./env";
 import { currentGeneration } from "./session";
 import type { Event, EventStatus } from "./types";
+import { uniqueIds } from "./eventIds";
 import { backendFetch } from "./backendFetch";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
@@ -196,7 +197,7 @@ export type PaymentRow = {
 };
 
 const normalizeIds = (ids: string[]): (string | number)[] =>
-  [...new Set(ids)].map((id) => {
+  uniqueIds(ids).map((id) => {
     const numericId = Number(id);
     return Number.isSafeInteger(numericId) ? numericId : id;
   });

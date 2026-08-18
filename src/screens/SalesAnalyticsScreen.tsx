@@ -1,24 +1,40 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import type { TabScreenNavigationProp } from "../navigation/types";
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
-import SurfaceCard from "../components/stitch/SurfaceCard";
 import { MiniBarChart } from "../components/stitch/Charts";
-import { formatCurrencyARS, formatDateLong, formatInteger } from "../lib/formatters";
+import SurfaceCard from "../components/stitch/SurfaceCard";
+import {
+  fetchGlobalStats,
+  fetchHistoryFor,
+  type StatsData,
+} from "../lib/apiClient";
+import { getFunctionIdsForSelection } from "../lib/eventIds";
+import {
+  formatCurrencyARS,
+  formatDateLong,
+  formatInteger,
+} from "../lib/formatters";
+import type { HistoryDay } from "../lib/reportApi";
+import { getPalette } from "../lib/theme";
+import type { Event, EventFunction } from "../lib/types";
+import type { TabScreenNavigationProp } from "../navigation/types";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
-import { getPalette } from "../lib/theme";
-import { fetchHistoryFor } from "../lib/apiClient";
-import type { Event, EventFunction } from "../lib/types";
-import type { HistoryDay } from "../lib/reportApi";
 
 const allEventsOption = { key: "all", value: "Todos los eventos" };
 
-const getEventRevenue = (event: Event) => event.grossRevenueARS ?? event.ticketsSold * event.ticketPriceARS;
+const getEventRevenue = (event: Event) =>
+  event.grossRevenueARS ?? event.ticketsSold * event.ticketPriceARS;
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const AR_TIME_ZONE = "America/Argentina/Buenos_Aires";
@@ -32,7 +48,9 @@ const argentinaDateKey = (daysAgo: number): string => {
   }).formatToParts(new Date());
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((part) => part.type === type)?.value ?? 0);
-  const date = new Date(Date.UTC(value("year"), value("month") - 1, value("day") - daysAgo));
+  const date = new Date(
+    Date.UTC(value("year"), value("month") - 1, value("day") - daysAgo),
+  );
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 };
 
@@ -52,7 +70,11 @@ const buildLastNDays = (
   const result: HistoryDay[] = [];
   const today = (endDateKey && parseDayDate(endDateKey)) || new Date();
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const d = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - i,
+    );
     const key = toISOKey(d);
     result.push(
       map.get(key) ?? {
@@ -85,7 +107,10 @@ const statusLabel = (status: string) => {
   return "EN VENTA";
 };
 
-const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => {
+const statusColor = (
+  status: string,
+  palette: ReturnType<typeof getPalette>,
+) => {
   if (status === "sold_out") return palette.warning;
   if (status === "finished") return palette.subtext;
   return palette.primary;
@@ -99,35 +124,67 @@ const SalesAnalyticsScreen = () => {
   const statsPending = events.statsPending;
 
   const [selectedEventId, setSelectedEventId] = useState("all");
-  const [selectedBarIndex, setSelectedBarIndex] = useState<number | undefined>(undefined);
+  const [selectedBarIndex, setSelectedBarIndex] = useState<number | undefined>(
+    undefined,
+  );
   const [showAllFunctions, setShowAllFunctions] = useState(false);
   const [weekHistory, setWeekHistory] = useState<HistoryDay[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [summaryStats, setSummaryStats] = useState<StatsData | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) loadEvents(accessToken);
   }, [events.status, loadEvents, accessToken]);
 
-  const historyEventIds = useMemo(() => {
-    const selectedEvents = selectedEventId === "all"
-      ? events.data
-      : events.data.filter((event) => event.id === selectedEventId);
-    return [...new Set(selectedEvents.flatMap((event) =>
-      event.functions?.map((fn) => fn.id) ?? [event.id],
-    ))];
+  const selectedEventIds = useMemo(() => {
+    return getFunctionIdsForSelection(events.data, selectedEventId);
   }, [events.data, selectedEventId]);
+
+  useEffect(() => {
+    if (!accessToken || selectedEventIds.length === 0) {
+      setSummaryStats(null);
+      setSummaryLoading(false);
+      setSummaryError(null);
+      return;
+    }
+    let cancelled = false;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    setSummaryStats(null);
+    fetchGlobalStats(accessToken, selectedEventIds, "all")
+      .then((stats) => {
+        if (!cancelled) setSummaryStats(stats);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setSummaryStats(null);
+        setSummaryError(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar el resumen de ventas.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedEventIds]);
 
   // Fetch last 7 days of history when event selection changes
   useEffect(() => {
-    if (!accessToken || historyEventIds.length === 0) return;
+    if (!accessToken || selectedEventIds.length === 0) return;
     let cancelled = false;
     setHistoryLoading(true);
     setHistoryError(null);
     setSelectedBarIndex(undefined);
     const dateFrom = argentinaDateKey(6);
     const dateTo = argentinaDateKey(0);
-    fetchHistoryFor(accessToken, historyEventIds, "custom", dateFrom, dateTo)
+    fetchHistoryFor(accessToken, selectedEventIds, "custom", dateFrom, dateTo)
       .then((result) => {
         if (cancelled) return;
         setWeekHistory(buildLastNDays(result.rows, 7, dateTo));
@@ -136,7 +193,9 @@ const SalesAnalyticsScreen = () => {
         if (cancelled) return;
         setWeekHistory([]);
         setHistoryError(
-          error instanceof Error ? error.message : "No se pudieron cargar los últimos 7 días.",
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar los últimos 7 días.",
         );
       })
       .finally(() => {
@@ -146,7 +205,7 @@ const SalesAnalyticsScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, historyEventIds]);
+  }, [accessToken, selectedEventIds]);
 
   const activeEvents = useMemo(
     () => events.data.filter((event) => event.status !== "finished"),
@@ -156,7 +215,10 @@ const SalesAnalyticsScreen = () => {
   useEffect(() => {
     if (activeEvents.length === 1) {
       setSelectedEventId(activeEvents[0].id);
-    } else if (selectedEventId !== "all" && !activeEvents.some((e) => e.id === selectedEventId)) {
+    } else if (
+      selectedEventId !== "all" &&
+      !activeEvents.some((e) => e.id === selectedEventId)
+    ) {
       setSelectedEventId("all");
     }
   }, [activeEvents, selectedEventId]);
@@ -170,30 +232,12 @@ const SalesAnalyticsScreen = () => {
     () => (selectedEvent ? [selectedEvent] : activeEvents),
     [activeEvents, selectedEvent],
   );
-  const visibleStatsUnavailable =
-    statsPending || visibleEvents.some((event) => event.statsStatus === "error");
-
   const eventOptions = useMemo(
-    () => [allEventsOption, ...activeEvents.map((e) => ({ key: e.id, value: e.name }))],
+    () => [
+      allEventsOption,
+      ...activeEvents.map((e) => ({ key: e.id, value: e.name })),
+    ],
     [activeEvents],
-  );
-
-  const totalRevenue = useMemo(
-    () => visibleEvents.reduce((sum, e) => sum + getEventRevenue(e), 0),
-    [visibleEvents],
-  );
-  const totalTicketsSold = useMemo(
-    () => visibleEvents.reduce((sum, e) => sum + e.ticketsSold, 0),
-    [visibleEvents],
-  );
-  const totalInvitations = useMemo(
-    () =>
-      visibleEvents.reduce(
-        (sum, e) =>
-          sum + (e.functions?.reduce((s, f) => s + (f.invitations ?? 0), 0) ?? e.invitations ?? 0),
-        0,
-      ),
-    [visibleEvents],
   );
 
   // Weekly bar chart data (last 7 days from history)
@@ -201,7 +245,9 @@ const SalesAnalyticsScreen = () => {
     () =>
       weekHistory.map((day) => {
         const d = parseDayDate(day.day_date);
-        const label = d ? `${DAY_NAMES[d.getDay()]}\n${d.getDate()}` : day.day_formatted.slice(0, 5);
+        const label = d
+          ? `${DAY_NAMES[d.getDay()]}\n${d.getDate()}`
+          : day.day_formatted.slice(0, 5);
         return {
           label,
           value: day.total_net,
@@ -223,11 +269,15 @@ const SalesAnalyticsScreen = () => {
   const initialFunctions = useMemo(() => {
     const now = Date.now();
     return selectedFunctions
-      .filter((f) => f.status === "on_sale" && new Date(f.dateISO).getTime() >= now)
+      .filter(
+        (f) => f.status === "on_sale" && new Date(f.dateISO).getTime() >= now,
+      )
       .slice(0, 5);
   }, [selectedFunctions]);
 
-  const visibleFunctions = showAllFunctions ? selectedFunctions : initialFunctions;
+  const visibleFunctions = showAllFunctions
+    ? selectedFunctions
+    : initialFunctions;
   const hiddenCount = selectedFunctions.length - initialFunctions.length;
 
   const pillLabel = selectedEvent
@@ -235,11 +285,18 @@ const SalesAnalyticsScreen = () => {
     : `${activeEvents.length} evento${activeEvents.length !== 1 ? "s" : ""} incluido${activeEvents.length !== 1 ? "s" : ""}`;
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={{ flex: 1, backgroundColor: palette.background }}
+    >
       <ScrollView contentContainerStyle={{ paddingBottom: 34 }}>
         <AppHeader
           title="Ventas"
-          subtitle={selectedEvent ? selectedEvent.name : "Rendimiento comercial consolidado"}
+          subtitle={
+            selectedEvent
+              ? selectedEvent.name
+              : "Rendimiento comercial consolidado"
+          }
           pillLabel={pillLabel}
           onAvatarPress={() => navigation.navigate("Profile")}
           avatarInitials={user?.initials}
@@ -248,18 +305,57 @@ const SalesAnalyticsScreen = () => {
         <View style={{ paddingHorizontal: 20, gap: 14 }}>
           {/* Hero KPI */}
           <SurfaceCard tone="hero">
-            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
-              {selectedEvent ? "Total recaudado — todas las funciones" : "Total recaudado"}
+            <Text
+              style={{
+                color: palette.subtext,
+                fontSize: 12,
+                fontWeight: "700",
+                textTransform: "uppercase",
+              }}
+            >
+              {selectedEvent
+                ? "Total recaudado — todas las funciones"
+                : "Total recaudado"}
             </Text>
-            <Text style={{ color: palette.text, fontSize: 36, fontWeight: "800", marginTop: 8 }}>
-              {visibleStatsUnavailable ? "—" : formatCurrencyARS(totalRevenue)}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+              style={{
+                color: palette.text,
+                fontSize: 36,
+                fontWeight: "800",
+                marginTop: 8,
+              }}
+            >
+              {summaryStats ? formatCurrencyARS(summaryStats.total) : "—"}
             </Text>
+            {summaryLoading ? (
+              <ActivityIndicator
+                color={palette.primary}
+                style={{ marginTop: 10, alignSelf: "flex-start" }}
+              />
+            ) : summaryError ? (
+              <Text
+                style={{ color: palette.danger, fontSize: 12, marginTop: 8 }}
+              >
+                {summaryError}
+              </Text>
+            ) : null}
           </SurfaceCard>
 
           {/* Dropdown selector — solo si hay más de 1 evento activo */}
           {activeEvents.length > 1 && (
             <SurfaceCard style={{ paddingVertical: 16, borderWidth: 1 }}>
-              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 }}>
+              <Text
+                style={{
+                  color: palette.subtext,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
                 Evento
               </Text>
               <Dropdown
@@ -276,7 +372,8 @@ const SalesAnalyticsScreen = () => {
                   minHeight: 56,
                   borderRadius: 18,
                   borderWidth: 1,
-                  borderColor: theme === "dark" ? palette.border : palette.primarySoft,
+                  borderColor:
+                    theme === "dark" ? palette.border : palette.primarySoft,
                   backgroundColor: palette.surface,
                   paddingHorizontal: 16,
                 }}
@@ -288,9 +385,15 @@ const SalesAnalyticsScreen = () => {
                   overflow: "hidden",
                 }}
                 placeholderStyle={{ color: palette.subtext, fontSize: 15 }}
-                selectedTextStyle={{ color: palette.text, fontSize: 15, fontWeight: "700" }}
+                selectedTextStyle={{
+                  color: palette.text,
+                  fontSize: 15,
+                  fontWeight: "700",
+                }}
                 itemTextStyle={{ color: palette.text, fontSize: 15 }}
-                activeColor={theme === "dark" ? palette.surfaceMuted : palette.primarySoft}
+                activeColor={
+                  theme === "dark" ? palette.surfaceMuted : palette.primarySoft
+                }
                 iconColor={palette.primary}
                 maxHeight={320}
                 placeholder="Seleccioná un evento"
@@ -299,33 +402,122 @@ const SalesAnalyticsScreen = () => {
           )}
 
           {/* Entradas vendidas e invitaciones */}
+          {/* Ticket promedio y compradores únicos */}
           <SurfaceCard>
             <View style={{ flexDirection: "row" }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Entradas vendidas</Text>
-                <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                  {visibleStatsUnavailable ? "—" : formatInteger(totalTicketsSold)}
+                <Text
+                  style={{
+                    color: palette.subtext,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
+                  Entradas vendidas
+                </Text>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 26,
+                    fontWeight: "800",
+                    marginTop: 8,
+                  }}
+                >
+                  {summaryStats ? formatInteger(summaryStats.tickets) : "—"}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700" }}>Invitaciones</Text>
-                <Text style={{ color: palette.text, fontSize: 26, fontWeight: "800", marginTop: 8 }}>
-                  {visibleStatsUnavailable ? "—" : formatInteger(totalInvitations)}
+                <Text
+                  style={{
+                    color: palette.subtext,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
+                  Invitaciones
+                </Text>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 26,
+                    fontWeight: "800",
+                    marginTop: 8,
+                  }}
+                >
+                  {summaryStats ? formatInteger(summaryStats.invitations) : "—"}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", marginTop: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: palette.subtext,
+                    fontSize: 10,
+                    fontWeight: "700",
+                  }}
+                >
+                  Ticket promedio
+                </Text>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 16,
+                    fontWeight: "700",
+                    marginTop: 4,
+                  }}
+                >
+                  {summaryStats
+                    ? formatCurrencyARS(summaryStats.ticket_medio)
+                    : "—"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: palette.subtext,
+                    fontSize: 10,
+                    fontWeight: "800",
+                  }}
+                >
+                  Compradores únicos
+                </Text>
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 16,
+                    fontWeight: "800",
+                    marginTop: 4,
+                  }}
+                >
+                  {summaryStats
+                    ? formatInteger(summaryStats.unique_buyers)
+                    : "—"}
                 </Text>
               </View>
             </View>
           </SurfaceCard>
 
-          {/* Weekly sales chart */}
           <SurfaceCard>
-            <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Ingresos semanales</Text>
-            <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+            <Text
+              style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}
+            >
+              Ingresos semanales
+            </Text>
+            <Text
+              style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+            >
               Últimos 7 días · tocá una barra para ver el monto
             </Text>
             {historyLoading ? (
-              <ActivityIndicator color={palette.primary} style={{ marginTop: 24, marginBottom: 8 }} />
+              <ActivityIndicator
+                color={palette.primary}
+                style={{ marginTop: 24, marginBottom: 8 }}
+              />
             ) : historyError ? (
-              <Text style={{ color: palette.danger, fontSize: 13, marginTop: 16 }}>
+              <Text
+                style={{ color: palette.danger, fontSize: 13, marginTop: 16 }}
+              >
                 {historyError}
               </Text>
             ) : weeklyTrend.length > 0 ? (
@@ -333,40 +525,62 @@ const SalesAnalyticsScreen = () => {
                 <MiniBarChart
                   data={weeklyTrend}
                   selectedIndex={selectedBarIndex}
-                  onBarPress={(i) => setSelectedBarIndex((prev) => (prev === i ? undefined : i))}
+                  onBarPress={(i) =>
+                    setSelectedBarIndex((prev) => (prev === i ? undefined : i))
+                  }
                   barAreaHeight={120}
                 />
-                {selectedBarIndex != null && weekHistory[selectedBarIndex] && (() => {
-                  const row = weekHistory[selectedBarIndex];
-                  const d = parseDayDate(row.day_date);
-                  const dateLabel = d
-                    ? new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "short" }).format(d)
-                    : row.day_formatted;
-                  return (
-                    <View
-                      style={{
-                        marginTop: 14,
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        backgroundColor: palette.primarySoft,
-                        borderRadius: 12,
-                        paddingHorizontal: 14,
-                        paddingVertical: 10,
-                      }}
-                    >
-                      <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-                        {dateLabel}
-                      </Text>
-                      <Text style={{ color: palette.primary, fontSize: 15, fontWeight: "800" }}>
-                        {formatCurrencyARS(row.total_net)}
-                      </Text>
-                    </View>
-                  );
-                })()}
+                {selectedBarIndex != null &&
+                  weekHistory[selectedBarIndex] &&
+                  (() => {
+                    const row = weekHistory[selectedBarIndex];
+                    const d = parseDayDate(row.day_date);
+                    const dateLabel = d
+                      ? new Intl.DateTimeFormat("es-AR", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "short",
+                        }).format(d)
+                      : row.day_formatted;
+                    return (
+                      <View
+                        style={{
+                          marginTop: 14,
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          backgroundColor: palette.primarySoft,
+                          borderRadius: 12,
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: palette.primary,
+                            fontSize: 13,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {dateLabel}
+                        </Text>
+                        <Text
+                          style={{
+                            color: palette.primary,
+                            fontSize: 15,
+                            fontWeight: "800",
+                          }}
+                        >
+                          {formatCurrencyARS(row.total_net)}
+                        </Text>
+                      </View>
+                    );
+                  })()}
               </>
             ) : (
-              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 16 }}>
+              <Text
+                style={{ color: palette.subtext, fontSize: 13, marginTop: 16 }}
+              >
                 Sin datos para los últimos 7 días.
               </Text>
             )}
@@ -375,8 +589,14 @@ const SalesAnalyticsScreen = () => {
           {/* When a specific event is selected: list its functions */}
           {selectedEvent ? (
             <SurfaceCard>
-              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Funciones</Text>
-              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+              <Text
+                style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}
+              >
+                Funciones
+              </Text>
+              <Text
+                style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+              >
                 Tocá una función para ver su detalle
               </Text>
               <View style={{ marginTop: 16, gap: 8 }}>
@@ -384,9 +604,8 @@ const SalesAnalyticsScreen = () => {
                   <Pressable
                     key={fn.id}
                     onPress={() =>
-                      navigation.navigate("Events", {
-                        screen: "FunctionDetail",
-                        params: { functionId: fn.id },
+                      navigation.navigate("FunctionDetail", {
+                        functionId: fn.id,
                       })
                     }
                     style={({ pressed }) => ({
@@ -398,8 +617,17 @@ const SalesAnalyticsScreen = () => {
                     })}
                   >
                     {/* Row 1: date + status badge + chevron */}
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700", flex: 1 }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <Text
+                        style={{
+                          color: palette.text,
+                          fontSize: 13,
+                          fontWeight: "700",
+                          flex: 1,
+                        }}
+                      >
                         {formatDateLong(fn.dateISO)}
                       </Text>
                       <View
@@ -411,21 +639,46 @@ const SalesAnalyticsScreen = () => {
                           marginLeft: 8,
                         }}
                       >
-                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 10,
+                            fontWeight: "800",
+                          }}
+                        >
                           {statusLabel(fn.status)}
                         </Text>
                       </View>
-                      <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 6 }} />
+                      <Feather
+                        name="chevron-right"
+                        size={16}
+                        color={palette.subtext}
+                        style={{ marginLeft: 6 }}
+                      />
                     </View>
                     {/* Row 2: tickets + invitations */}
-                    <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 4 }}>
-                      {statsPending || fn.statsStatus === "error"
+                    <Text
+                      style={{
+                        color: palette.subtext,
+                        fontSize: 11,
+                        marginTop: 4,
+                      }}
+                    >
+                      {fn.statsStatus !== "loaded"
                         ? "—"
                         : `${formatInteger(fn.ticketsSold)} entradas${fn.invitations > 0 ? ` · ${formatInteger(fn.invitations)} invitaciones` : ""}`}
                     </Text>
                     {/* Row 3: revenue */}
-                    <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 2 }}>
-                      {statsPending || fn.statsStatus === "error" ? "—" : formatCurrencyARS(fn.grossRevenueARS)}
+                    <Text
+                      style={{
+                        color: palette.subtext,
+                        fontSize: 11,
+                        marginTop: 2,
+                      }}
+                    >
+                      {fn.statsStatus !== "loaded"
+                        ? "—"
+                        : formatCurrencyARS(fn.grossRevenueARS)}
                     </Text>
                   </Pressable>
                 ))}
@@ -435,10 +688,22 @@ const SalesAnalyticsScreen = () => {
               {hiddenCount > 0 && (
                 <Pressable
                   onPress={() => setShowAllFunctions((v) => !v)}
-                  style={{ marginTop: 10, alignItems: "center", paddingVertical: 10 }}
+                  style={{
+                    marginTop: 10,
+                    alignItems: "center",
+                    paddingVertical: 10,
+                  }}
                 >
-                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-                    {showAllFunctions ? "Ver menos" : `Ver todas (${hiddenCount} más)`}
+                  <Text
+                    style={{
+                      color: palette.primary,
+                      fontSize: 13,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {showAllFunctions
+                      ? "Ver menos"
+                      : `Ver todas (${hiddenCount} más)`}
                   </Text>
                 </Pressable>
               )}
@@ -446,51 +711,117 @@ const SalesAnalyticsScreen = () => {
           ) : (
             /* When all events: ranking by revenue */
             <SurfaceCard>
-              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Ranking de eventos</Text>
-              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+              <Text
+                style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}
+              >
+                Ranking de eventos
+              </Text>
+              <Text
+                style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+              >
                 Ordenados por ingresos totales
               </Text>
               <View style={{ marginTop: 16, gap: 8 }}>
                 {statsPending ? (
-                  <ActivityIndicator color={palette.primary} style={{ marginVertical: 8 }} />
+                  <ActivityIndicator
+                    color={palette.primary}
+                    style={{ marginVertical: 8 }}
+                  />
                 ) : (
                   [...visibleEvents]
                     .filter((event) => event.statsStatus !== "error")
                     .sort((a, b) => getEventRevenue(b) - getEventRevenue(a))
                     .map((event, index) => (
-                    <Pressable
-                      key={event.id}
-                      onPress={() =>
-                        navigation.navigate("Events", {
-                          screen: "EventDetail",
-                          params: { eventId: event.id },
-                        })
-                      }
-                      style={({ pressed }) => ({
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: palette.surfaceMuted,
-                        borderRadius: 16,
-                        paddingHorizontal: 14,
-                        paddingVertical: 12,
-                        opacity: pressed ? 0.75 : 1,
-                      })}
-                    >
-                      <Text style={{ color: palette.subtext, fontSize: 13, fontWeight: "800", width: 24 }}>
-                        #{index + 1}
-                      </Text>
-                      <View style={{ flex: 1, marginLeft: 8 }}>
-                        <Text style={{ color: palette.text, fontSize: 13, fontWeight: "700" }} numberOfLines={1}>
-                          {event.name}
+                      <Pressable
+                        key={event.id}
+                        onPress={() =>
+                          navigation.navigate("EventDetail", {
+                            eventId: event.id,
+                          })
+                        }
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: palette.surfaceMuted,
+                          borderRadius: 16,
+                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <View
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            alignItems: "flex-start",
+                            gap: 4,
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                              alignSelf: "stretch",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: palette.subtext,
+                                fontSize: 13,
+                                fontWeight: "800",
+                                width: 28,
+                              }}
+                            >
+                              #{index + 1}
+                            </Text>
+                            <Text
+                              style={{
+                                color: palette.text,
+                                fontSize: 13,
+                                fontWeight: "700",
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {event.name}
+                            </Text>
+                          </View>
+                          <Text
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.8}
+                            style={{
+                              color: palette.subtext,
+                              fontSize: 11,
+                              marginLeft: 36,
+                              alignSelf: "stretch",
+                            }}
+                          >
+                            {event.functions?.length ?? 1} función
+                            {(event.functions?.length ?? 1) !== 1
+                              ? "es"
+                              : ""} · {formatInteger(event.ticketsSold)}{" "}
+                            entradas
+                          </Text>
+                        </View>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.7}
+                          style={{
+                            color: palette.primary,
+                            fontSize: 14,
+                            fontWeight: "800",
+                            marginTop: 2,
+                            marginLeft: 10,
+                            maxWidth: "42%",
+                          }}
+                        >
+                          {formatCurrencyARS(getEventRevenue(event))}
                         </Text>
-                        <Text style={{ color: palette.subtext, fontSize: 11, marginTop: 2 }}>
-                          {event.functions?.length ?? 1} función{(event.functions?.length ?? 1) !== 1 ? "es" : ""} · {formatInteger(event.ticketsSold)} entradas
-                        </Text>
-                      </View>
-                      <Text style={{ color: palette.text, fontSize: 14, fontWeight: "800" }}>
-                        {formatCurrencyARS(getEventRevenue(event))}
-                      </Text>
-                    </Pressable>
+                      </Pressable>
                     ))
                 )}
               </View>

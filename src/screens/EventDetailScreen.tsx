@@ -3,7 +3,7 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { EventsStackParamList, EventsScreenNavigationProp } from "../navigation/types";
+import { AppScreenNavigationProp, AppStackParamList } from "../navigation/types";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -12,7 +12,7 @@ import SurfaceCard from "../components/stitch/SurfaceCard";
 import { formatCurrencyARS, formatDateLong, formatInteger } from "../lib/formatters";
 import type { EventFunction } from "../lib/types";
 
-type EventRoute = RouteProp<EventsStackParamList, "EventDetail">;
+type EventRoute = RouteProp<AppStackParamList, "EventDetail">;
 
 const statusLabel = (status: string) => {
   if (status === "sold_out") return "AGOTADO";
@@ -27,12 +27,11 @@ const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => 
 };
 
 const EventDetailScreen = () => {
-  const navigation = useNavigation<EventsScreenNavigationProp>();
+  const navigation = useNavigation<AppScreenNavigationProp>();
   const route = useRoute<EventRoute>();
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
-  const statsPending = events.statsPending;
 
   const eventId = route.params.eventId;
 
@@ -44,7 +43,7 @@ const EventDetailScreen = () => {
     () => events.data.find((e) => e.id === eventId),
     [events.data, eventId],
   );
-  const eventStatsUnavailable = statsPending || event?.statsStatus === "error";
+  const eventStatsUnavailable = event?.statsStatus !== "loaded";
 
   const functions: EventFunction[] = useMemo(
     () => event?.functions ?? [],
@@ -154,7 +153,7 @@ const EventDetailScreen = () => {
           </Pressable>
         ) : null}
         renderItem={({ item }) => {
-          const itemStatsUnavailable = statsPending || item.statsStatus === "error";
+          const itemStatsUnavailable = item.statsStatus !== "loaded";
           const isAllInvitations = !itemStatsUnavailable && item.ticketsSold === 0 && item.invitations > 0;
           return (
             <Pressable

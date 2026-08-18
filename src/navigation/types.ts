@@ -4,8 +4,6 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 
 export type EventsStackParamList = {
   EventsList: undefined;
-  EventDetail: { eventId: string };
-  FunctionDetail: { functionId: string };
 };
 
 export type RootTabParamList = {
@@ -24,6 +22,8 @@ export type AppStackParamList = {
   Profile: undefined;
   ExecutiveDashboard: undefined;
   TrendDetail: { eventId: string; selectedIndex?: number };
+  EventDetail: { eventId: string };
+  FunctionDetail: { functionId: string };
 };
 
 /**
@@ -37,10 +37,11 @@ export type TabScreenNavigationProp = CompositeNavigationProp<
 >;
 
 /**
- * Use this in screens inside EventsStack (EventsList, EventDetail) that
- * need to navigate to AppStack screens (Profile).
+ * Use this in EventsList to access both its local navigator and AppStack.
  */
 export type EventsScreenNavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<EventsStackParamList>,
   NativeStackNavigationProp<AppStackParamList>
 >;
+
+export type AppScreenNavigationProp = NativeStackNavigationProp<AppStackParamList>;

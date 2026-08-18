@@ -1,7 +1,12 @@
 import type { Event, EventFunction } from "./types";
 import { currentGeneration, isCurrentGeneration } from "./session";
 import { InflightRegistry } from "./InflightRegistry";
-import { applyStatsToFlatEvents, type FunctionStatsValue } from "./eventStats";
+import {
+  applyStatsProgressToFlatEvents,
+  applyStatsToFlatEvents,
+  type FunctionStatsValue,
+} from "./eventStats";
+import { getIdsKey } from "./eventIds";
 import {
   fetchEventList,
   fetchStats,
@@ -51,6 +56,7 @@ export const clearAllCaches = (): void => {
   eventsCacheVersion += 1;
   cache.clear();
   eventsInflight.clear();
+  globalStatsInflight.clear();
   historyCache.clear();
   historyInflight.clear();
 };
@@ -137,6 +143,7 @@ const fetchFunctionStatsMap = async (
   token: string,
   functionIds: string[],
   date: string = "all",
+  onProgress?: (result: FunctionStatsResult) => void,
 ): Promise<FunctionStatsResult> => {
   const CONCURRENCY = 8;
   const out: Record<string, FunctionStats> = {};
@@ -162,6 +169,7 @@ const fetchFunctionStatsMap = async (
         invitations: result.invitations,
       };
     }
+    onProgress?.({ stats: { ...out }, failedIds: [...failedIds] });
   }
   return { stats: out, failedIds };
 };
@@ -171,6 +179,7 @@ const fetchFunctionStatsMap = async (
 // cuentas grandes). La generación forma parte de la clave, así una petición de
 // la sesión anterior nunca se comparte con la nueva.
 const eventsInflight = new InflightRegistry<EventsLoadResult>();
+const globalStatsInflight = new InflightRegistry<StatsData>();
 
 /**
  * Se invoca con los eventos ya listables (nombre, fecha y estado) apenas llega
@@ -191,9 +200,34 @@ const loadEventsEnriched = async (
     onPartial(groupEventsByName(flatEvents));
   }
 
+  const functionIds = flatEvents.map((event) => event.id);
+  // Los KPI globales tienen prioridad, pero un fallo aislado no debe impedir
+  // que el catálogo continúe enriqueciéndose.
+  if (functionIds.length > 0) {
+    await Promise.allSettled([
+      fetchHistoryFor(token, functionIds, "this_week"),
+      fetchHistoryFor(token, functionIds, "last_week"),
+      fetchGlobalStats(token, functionIds, "all"),
+    ]);
+  }
+
+  // La fase crítica ya está cacheada. Cedemos un turno para que Dashboard
+  // publique sus KPI antes de iniciar cientos de requests por función.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
   const { stats: statsMap, failedIds } = await fetchFunctionStatsMap(
     token,
-    flatEvents.map((e) => e.id),
+    functionIds,
+    "all",
+    ({ stats, failedIds: partialFailedIds }) => {
+      if (!onPartial || !isCurrentGeneration(gen)) return;
+      const progressiveFlat = applyStatsProgressToFlatEvents(
+        flatEvents,
+        stats,
+        partialFailedIds,
+      );
+      onPartial(groupEventsByName(progressiveFlat));
+    },
   );
 
   const enrichedFlat = applyStatsToFlatEvents(flatEvents, statsMap);
@@ -279,13 +313,15 @@ export const fetchGlobalStats = async (
   date: string,
 ): Promise<StatsData> => {
   const gen = currentGeneration();
-  const idsKey = [...eventIds].sort().join(",");
+  const idsKey = getIdsKey(eventIds);
   const cacheKey = scopedKey(`global-stats-${idsKey}-${date}`, gen);
   const cached = getCached<StatsData>(cacheKey);
   if (cached) return cached;
-  const data = await fetchStats(token, eventIds, { date });
-  setCachedForGeneration(cacheKey, data, gen);
-  return data;
+  return globalStatsInflight.getOrCreate(cacheKey, async () => {
+    const data = await fetchStats(token, eventIds, { date });
+    setCachedForGeneration(cacheKey, data, gen);
+    return data;
+  });
 };
 
 export const fetchEventStats = async (
@@ -331,7 +367,7 @@ const historyKey = (
   gen: number,
 ): string =>
   scopedKey(
-    `history-${[...eventIds].sort().join(",")}-${date}-${dateFrom ?? ""}-${dateTo ?? ""}`,
+    `history-${getIdsKey(eventIds)}-${date}-${dateFrom ?? ""}-${dateTo ?? ""}`,
     gen,
   );
 

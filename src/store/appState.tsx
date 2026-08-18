@@ -52,7 +52,11 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
     statsRetrying: false,
   });
   const eventsRequestIdRef = useRef(0);
-  const activeEventsLoadRef = useRef<{ id: number; promise: Promise<void> } | null>(null);
+  const activeEventsLoadRef = useRef<{
+    id: number;
+    generation: number;
+    promise: Promise<void>;
+  } | null>(null);
   const lastSuccessfulEventsRef = useRef<Event[]>([]);
   const failedStatsIdsRef = useRef<string[]>([]);
   const statsRetryingRef = useRef(false);
@@ -62,6 +66,12 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
   // el estado vuelve a 'idle' para que las pantallas recarguen desde cero.
   const { sessionGeneration } = useAuth();
   useEffect(() => {
+    // Los efectos de una pantalla hija pueden iniciar la carga antes que este
+    // efecto del provider. Si ya pertenece a la sesión recién publicada, no la
+    // invalidamos: startSession ya limpió todas las cachés antes de autenticar.
+    if (activeEventsLoadRef.current?.generation === sessionGeneration) {
+      return;
+    }
     eventsRequestIdRef.current += 1;
     activeEventsLoadRef.current = null;
     lastSuccessfulEventsRef.current = [];
@@ -153,7 +163,7 @@ export const AppStateProvider = ({ children }: PropsWithChildren) => {
       }
     })();
 
-    activeEventsLoadRef.current = { id: requestId, promise };
+    activeEventsLoadRef.current = { id: requestId, generation: gen, promise };
     return promise;
   }, []);
 

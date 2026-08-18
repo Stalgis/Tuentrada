@@ -10,6 +10,7 @@ import { MONTH_PERIODS, useGlobalStats } from "../hooks/useGlobalStats";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
+import { getEventsFunctionIds } from "../lib/eventIds";
 import type { AppStackParamList } from "../navigation/types";
 import type { EventFunction } from "../lib/types";
 
@@ -22,9 +23,7 @@ const ExecutiveDashboardScreen = () => {
   const palette = getPalette(theme);
   const statsPending = events.statsPending;
   const eventIds = useMemo(
-    () => [...new Set(events.data.flatMap((event) =>
-      event.functions?.map((fn) => fn.id) ?? [event.id],
-    ))],
+    () => getEventsFunctionIds(events.data),
     [events.data],
   );
 
@@ -229,10 +228,7 @@ const ExecutiveDashboardScreen = () => {
                   <Pressable
                     key={fn.id}
                     onPress={() =>
-                      navigation.navigate("Tabs", {
-                        screen: "Events",
-                        params: { screen: "FunctionDetail", params: { functionId: fn.id } },
-                      })
+                      navigation.navigate("FunctionDetail", { functionId: fn.id })
                     }
                     style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
                   >

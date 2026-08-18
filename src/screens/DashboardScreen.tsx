@@ -17,8 +17,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
-import { useGlobalStats, WEEK_PERIODS } from "../hooks/useGlobalStats";
-import { invalidateEventsCache } from "../lib/apiClient";
+import { DASHBOARD_PERIODS, useGlobalStats } from "../hooks/useGlobalStats";
+import { fetchHistoryFor, invalidateEventsCache } from "../lib/apiClient";
 import {
   formatCurrencyARS,
   formatDateTimeShort,
@@ -27,6 +27,7 @@ import {
   formatTimeShort,
 } from "../lib/formatters";
 import { getPalette } from "../lib/theme";
+import { getEventsFunctionIds } from "../lib/eventIds";
 import type { Event, EventFunction } from "../lib/types";
 import type { TabScreenNavigationProp } from "../navigation/types";
 import { useAppState } from "../store/appState";
@@ -46,24 +47,75 @@ const DashboardScreen = () => {
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
   const eventIds = useMemo(
-    () => [...new Set(events.data.flatMap((event) =>
-      event.functions?.map((fn) => fn.id) ?? [event.id],
-    ))],
+    () => getEventsFunctionIds(events.data),
     [events.data],
   );
 
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
+  const weeklyRequestIdRef = useRef(0);
+  const [thisWeek, setThisWeek] = useState<number | null>(null);
+  const [lastWeek, setLastWeek] = useState<number | null>(null);
+  const [thisWeekLoading, setThisWeekLoading] = useState(false);
+  const [lastWeekLoading, setLastWeekLoading] = useState(false);
+  const [thisWeekError, setThisWeekError] = useState<string | null>(null);
+  const [lastWeekError, setLastWeekError] = useState<string | null>(null);
   const {
-    thisWeek: thisWeekStats,
-    lastWeek: lastWeekStats,
-    thisWeekLoading,
-    lastWeekLoading,
-    thisWeekError,
-    lastWeekError,
+    all: allStats,
+    allLoading,
+    allError,
     lastUpdated,
     retry: retryGlobalStats,
-  } = useGlobalStats(accessToken, WEEK_PERIODS, eventIds);
+  } = useGlobalStats(accessToken, DASHBOARD_PERIODS, eventIds);
+
+  const loadWeeklyHistory = useCallback(async () => {
+    if (!accessToken || eventIds.length === 0) return;
+    const requestId = ++weeklyRequestIdRef.current;
+    const isActive = () => weeklyRequestIdRef.current === requestId;
+    const revenue = (result: Awaited<ReturnType<typeof fetchHistoryFor>>) =>
+      result.total?.total_net ?? result.rows.reduce((sum, row) => sum + row.total_net, 0);
+
+    setThisWeekLoading(true);
+    setLastWeekLoading(true);
+    setThisWeekError(null);
+    setLastWeekError(null);
+
+    const thisWeekRequest = fetchHistoryFor(accessToken, eventIds, "this_week")
+      .then((result) => {
+        if (isActive()) setThisWeek(revenue(result));
+      })
+      .catch((error) => {
+        if (!isActive()) return;
+        setThisWeekError(error instanceof Error ? error.message : "No se pudo cargar esta semana.");
+      })
+      .finally(() => {
+        if (isActive()) setThisWeekLoading(false);
+      });
+
+    const lastWeekRequest = fetchHistoryFor(accessToken, eventIds, "last_week")
+      .then((result) => {
+        if (isActive()) setLastWeek(revenue(result));
+      })
+      .catch((error) => {
+        if (!isActive()) return;
+        setLastWeekError(error instanceof Error ? error.message : "No se pudo cargar la semana anterior.");
+      })
+      .finally(() => {
+        if (isActive()) setLastWeekLoading(false);
+      });
+
+    await Promise.allSettled([thisWeekRequest, lastWeekRequest]);
+  }, [accessToken, eventIds]);
+
+  useEffect(() => {
+    if (!accessToken || eventIds.length === 0) {
+      weeklyRequestIdRef.current += 1;
+      setThisWeek(null);
+      setLastWeek(null);
+      return;
+    }
+    loadWeeklyHistory();
+  }, [accessToken, eventIds.length, loadWeeklyHistory]);
 
   useEffect(() => {
     if (events.status === "idle" && accessToken) {
@@ -79,14 +131,18 @@ const DashboardScreen = () => {
     // Limpiamos la caché para forzar una lectura fresca del backend.
     invalidateEventsCache();
     try {
-      await Promise.all([retryGlobalStats(), loadEvents(accessToken, true)]);
+      await Promise.all([
+        retryGlobalStats(),
+        loadWeeklyHistory(),
+        loadEvents(accessToken, true),
+      ]);
     } catch {
       // Silencioso: los estados de error de eventos ya se muestran en la UI.
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [accessToken, loadEvents, retryGlobalStats]);
+  }, [accessToken, loadEvents, loadWeeklyHistory, retryGlobalStats]);
 
   const upcomingEvents = useMemo(
     () =>
@@ -134,19 +190,18 @@ const DashboardScreen = () => {
     [attentionFunctions],
   );
 
-  const thisWeek = thisWeekStats?.total ?? 0;
-  const lastWeek = lastWeekStats?.total ?? 0;
   const weekDeltaPercent =
-    lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;
-  const thisWeekTickets = thisWeekStats?.tickets ?? 0;
-  const thisWeekInvitations = thisWeekStats?.invitations ?? 0;
-  const ticketMedio = thisWeekStats?.ticket_medio ?? 0;
+    thisWeek != null && lastWeek != null && lastWeek > 0
+      ? ((thisWeek - lastWeek) / lastWeek) * 100
+      : 0;
+  const totalTickets = allStats?.tickets ?? 0;
+  const totalInvitations = allStats?.invitations ?? 0;
   const primaryEventRevenue = primaryFunction?.grossRevenueARS ?? 0;
   // Los eventos ya son listables pero sus importes valen 0 hasta que termina el
   // fan-out de stats: mostramos un marcador en lugar de cifras engañosas.
   const statsPending = events.statsPending;
   const primaryStatsUnavailable =
-    statsPending || primaryFunction?.statsStatus === "error";
+    primaryFunction?.statsStatus !== "loaded";
 
   return (
     <SafeAreaView
@@ -245,19 +300,19 @@ const DashboardScreen = () => {
                 >
                   Ingresos de la semana
                 </Text>
-                {thisWeekLoading && !thisWeekStats ? (
+                {thisWeek == null && (thisWeekLoading || !thisWeekError) ? (
                   <ActivityIndicator
                     color={palette.primary}
                     style={{ marginTop: 16, alignSelf: "flex-start" }}
                   />
-                ) : thisWeekError || !thisWeekStats ? (
+                ) : thisWeekError ? (
                   <View
                     style={{ marginTop: 12, alignItems: "flex-start", gap: 8 }}
                   >
                     <Text style={{ color: palette.danger, fontSize: 13 }}>
                       No se pudieron cargar los ingresos de la semana.
                     </Text>
-                    <Pressable onPress={retryGlobalStats}>
+                    <Pressable onPress={loadWeeklyHistory}>
                       <Text
                         style={{
                           color: palette.primary,
@@ -283,7 +338,7 @@ const DashboardScreen = () => {
                         letterSpacing: -1,
                       }}
                     >
-                      {formatCurrencyARS(thisWeekStats?.total ?? 0)}
+                      {formatCurrencyARS(thisWeek ?? 0)}
                     </Text>
                     <Text
                       style={{
@@ -292,11 +347,11 @@ const DashboardScreen = () => {
                         marginTop: 4,
                       }}
                     >
-                      {lastWeekLoading
+                      {lastWeekLoading || (lastWeek == null && !lastWeekError)
                         ? "Cargando comparación…"
-                        : lastWeekError || !lastWeekStats
+                        : lastWeekError
                           ? "Semana anterior no disponible"
-                          : lastWeek > 0
+                          : lastWeek != null && lastWeek > 0
                             ? `${weekDeltaPercent >= 0 ? "+" : ""}${formatPercent(weekDeltaPercent)} vs semana anterior`
                             : "Sin datos de la semana anterior"}
                     </Text>
@@ -329,16 +384,16 @@ const DashboardScreen = () => {
                 {
                   label: "Semana anterior",
                   value:
-                    lastWeekLoading || lastWeekError || !lastWeekStats
+                    lastWeekLoading || lastWeekError || lastWeek == null
                       ? "—"
                       : formatCurrencyARS(lastWeek),
                 },
                 {
-                  label: "Ticket promedio",
+                  label: "Ventas",
                   value:
-                    thisWeekLoading || thisWeekError || !thisWeekStats
+                    allLoading || allError || !allStats
                       ? "—"
-                      : formatCurrencyARS(ticketMedio),
+                      : formatCurrencyARS(allStats.total),
                 },
               ].map((item) => (
                 <View
@@ -385,14 +440,14 @@ const DashboardScreen = () => {
                 {[
                   {
                     label: "Entradas",
-                    value: thisWeekStats
-                      ? formatInteger(thisWeekTickets)
+                    value: allStats
+                      ? formatInteger(totalTickets)
                       : "—",
                   },
                   {
                     label: "Invitaciones",
-                    value: thisWeekStats
-                      ? formatInteger(thisWeekInvitations)
+                    value: allStats
+                      ? formatInteger(totalInvitations)
                       : "—",
                   },
                 ].map((item) => (
@@ -422,9 +477,16 @@ const DashboardScreen = () => {
               </View>
             </View>
 
-            {(thisWeekError || lastWeekError) && thisWeekStats ? (
+            {(thisWeekError || lastWeekError || allError) && thisWeek != null ? (
               <Pressable
-                onPress={retryGlobalStats}
+                onPress={() => {
+                  if (thisWeekError || lastWeekError) {
+                    loadWeeklyHistory();
+                  }
+                  if (allError) {
+                    retryGlobalStats();
+                  }
+                }}
                 style={{ marginTop: 10, alignSelf: "flex-start" }}
               >
                 <Text
@@ -551,9 +613,8 @@ const DashboardScreen = () => {
                 disabled={!primaryFunction}
                 onPress={() =>
                   primaryFunction &&
-                  navigation.navigate("Events", {
-                    screen: "FunctionDetail",
-                    params: { functionId: primaryFunction.id },
+                  navigation.navigate("FunctionDetail", {
+                    functionId: primaryFunction.id,
                   })
                 }
                 style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
@@ -702,9 +763,8 @@ const DashboardScreen = () => {
                   <Pressable
                     key={fn.id}
                     onPress={() =>
-                      navigation.navigate("Events", {
-                        screen: "FunctionDetail",
-                        params: { functionId: fn.id },
+                      navigation.navigate("FunctionDetail", {
+                        functionId: fn.id,
                       })
                     }
                     style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}

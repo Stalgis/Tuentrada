@@ -1,28 +1,40 @@
 let requestSequence = 0;
 
+const idsCountLabel = (body: BodyInit | null | undefined): string => {
+  if (typeof body !== "string") return "";
+  try {
+    const parsed = JSON.parse(body) as { ids?: unknown };
+    return Array.isArray(parsed.ids) ? ` ids=${parsed.ids.length}` : "";
+  } catch {
+    return "";
+  }
+};
+
 export const backendFetch = async (
   url: string,
   init: RequestInit = {},
 ): Promise<Response> => {
+  if (!__DEV__) {
+    return fetch(url, init);
+  }
+
   const id = ++requestSequence;
   const method = init.method ?? "GET";
   const startedAt = Date.now();
-  const startedISO = new Date(startedAt).toISOString();
+  const requestLabel = `${method} ${url}${idsCountLabel(init.body)}`;
 
-  console.log(`[API #${id} START] ${startedISO} ${method} ${url}`);
+  console.log(`[API #${id} START] ${new Date(startedAt).toISOString()} ${requestLabel}`);
 
   try {
     const response = await fetch(url, init);
-    const durationMs = Date.now() - startedAt;
     console.log(
-      `[API #${id} END] ${new Date().toISOString()} ${response.status} ${durationMs}ms ${method} ${url}`,
+      `[API #${id} END] ${response.status} ${Date.now() - startedAt}ms ${requestLabel}`,
     );
     return response;
   } catch (error) {
-    const durationMs = Date.now() - startedAt;
     const errorName = error instanceof Error ? error.name : "UnknownError";
     console.log(
-      `[API #${id} ERROR] ${new Date().toISOString()} ${errorName} ${durationMs}ms ${method} ${url}`,
+      `[API #${id} ERROR] ${errorName} ${Date.now() - startedAt}ms ${requestLabel}`,
     );
     throw error;
   }

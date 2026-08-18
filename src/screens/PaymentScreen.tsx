@@ -13,6 +13,7 @@ import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
 import type { TabScreenNavigationProp } from "../navigation/types";
 import type { EventFunction } from "../lib/types";
+import { getEventFunctionIds, getEventsFunctionIds, getIdsKey } from "../lib/eventIds";
 
 type PeriodKey = "all" | "this_week" | "last_week";
 
@@ -21,8 +22,6 @@ const eventPeriodOptions: { key: PeriodKey; label: string }[] = [
   { key: "this_week", label: "Esta semana" },
   { key: "last_week", label: "Semana anterior" },
 ];
-
-const globalPeriodOptions = eventPeriodOptions.filter((option) => option.key !== "all");
 
 const prettyName = (raw: string): string => {
   if (!raw) return "—";
@@ -39,14 +38,15 @@ const PaymentScreen = () => {
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
-  const statsPending = events.statsPending;
-
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null);
   const [period, setPeriod] = useState<PeriodKey>("this_week");
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allRows, setAllRows] = useState<PaymentRow[] | null>(null);
+  const [allLoading, setAllLoading] = useState(false);
+  const [allError, setAllError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showAllFunctions, setShowAllFunctions] = useState(false);
 
@@ -92,26 +92,65 @@ const PaymentScreen = () => {
 
   const requestIds = useMemo(() => {
     if (selectedFunctionId) return [selectedFunctionId];
-    const sourceEvents = selectedEvent ? [selectedEvent] : events.data;
-    return [...new Set(sourceEvents.flatMap((event) =>
-      event.functions?.map((fn) => fn.id) ?? [event.id],
-    ))];
+    return selectedEvent
+      ? getEventFunctionIds(selectedEvent)
+      : getEventsFunctionIds(events.data);
   }, [events.data, selectedEvent, selectedFunctionId]);
-  const periodOptions = selectedEvent ? eventPeriodOptions : globalPeriodOptions;
-  const requestPeriod = !selectedEvent && period === "all" ? "this_week" : period;
+  const requestIdsKey = getIdsKey(requestIds);
+  const periodOptions = eventPeriodOptions;
+  const requestPeriod = period;
 
   useEffect(() => {
-    if (!selectedEvent && period === "all") setPeriod("this_week");
-  }, [period, selectedEvent]);
+    const ids = requestIdsKey.split(",").filter(Boolean);
+    if (!accessToken || ids.length === 0) {
+      setAllRows(null);
+      setAllLoading(false);
+      setAllError(null);
+      return;
+    }
+    let cancelled = false;
+    setAllRows(null);
+    setAllLoading(true);
+    setAllError(null);
+    fetchPaymentsForEvent(accessToken, ids, "all")
+      .then((nextRows) => {
+        if (!cancelled) setAllRows(nextRows);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAllRows(null);
+        setAllError(err instanceof Error ? err.message : "No se pudieron cargar todos los pagos.");
+      })
+      .finally(() => {
+        if (!cancelled) setAllLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, requestIdsKey]);
 
   useEffect(() => {
-    if (!accessToken || requestIds.length === 0) return;
+    const ids = requestIdsKey.split(",").filter(Boolean);
+    if (!accessToken || ids.length === 0) return;
+    if (requestPeriod === "all") {
+      if (!allRows) {
+        setLoading(!allError);
+        setError(allError);
+        return;
+      }
+      setRows(allRows);
+      setLoading(false);
+      setError(null);
+      setShowAll(false);
+      setShowAllFunctions(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
     setShowAll(false);
     setShowAllFunctions(false);
-    fetchPaymentsForEvent(accessToken, requestIds, requestPeriod)
+    fetchPaymentsForEvent(accessToken, ids, requestPeriod)
       .then((nextRows) => {
         if (!cancelled) setRows(nextRows);
       })
@@ -126,7 +165,7 @@ const PaymentScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, requestIds, requestPeriod]);
+  }, [accessToken, allError, allRows, requestIdsKey, requestPeriod]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => b.sold_tickets - a.sold_tickets),
@@ -229,9 +268,12 @@ const PaymentScreen = () => {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
             {periodOptions.map((opt) => {
               const active = period === opt.key;
+              const waitingForAll =
+                opt.key === "all" && (allLoading || (!allRows && !allError));
               return (
                 <Pressable
                   key={opt.key}
+                  disabled={waitingForAll}
                   onPress={() => setPeriod(opt.key)}
                   style={{
                     backgroundColor: active ? palette.primary : palette.surface,
@@ -240,11 +282,15 @@ const PaymentScreen = () => {
                     paddingVertical: 7,
                     borderWidth: 1,
                     borderColor: active ? palette.primary : palette.hairline,
+                    opacity: waitingForAll ? 0.65 : 1,
                   }}
                 >
-                  <Text style={{ color: active ? "#fff" : palette.subtext, fontSize: 12, fontWeight: "700" }}>
-                    {opt.label}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    {waitingForAll && <ActivityIndicator size={11} color={palette.subtext} />}
+                    <Text style={{ color: active ? "#fff" : palette.subtext, fontSize: 12, fontWeight: "700" }}>
+                      {opt.label}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -289,10 +335,31 @@ const PaymentScreen = () => {
                   if (accessToken) {
                     setLoading(true);
                     setError(null);
+                    if (requestPeriod === "all") {
+                      setAllLoading(true);
+                      setAllError(null);
+                    }
                     fetchPaymentsForEvent(accessToken, requestIds, requestPeriod)
-                      .then(setRows)
-                      .catch((err) => setError(err instanceof Error ? err.message : "Error"))
-                      .finally(() => setLoading(false));
+                      .then((nextRows) => {
+                        setRows(nextRows);
+                        if (requestPeriod === "all") {
+                          setAllRows(nextRows);
+                        }
+                      })
+                      .catch((err) => {
+                        const message = err instanceof Error ? err.message : "Error";
+                        setError(message);
+                        if (requestPeriod === "all") {
+                          setAllRows(null);
+                          setAllError(message);
+                        }
+                      })
+                      .finally(() => {
+                        setLoading(false);
+                        if (requestPeriod === "all") {
+                          setAllLoading(false);
+                        }
+                      });
                   }
                 }}
                 style={{ marginTop: 12, alignSelf: "flex-start", backgroundColor: palette.primary, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 }}
@@ -369,8 +436,7 @@ const PaymentScreen = () => {
               <View style={{ marginTop: 14, gap: 10 }}>
                 {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => {
                   const isInvitationOnly =
-                    !statsPending &&
-                    fn.statsStatus !== "error" &&
+                    fn.statsStatus === "loaded" &&
                     fn.ticketsSold === 0 &&
                     fn.grossRevenueARS === 0 &&
                     fn.invitations > 0;
@@ -395,7 +461,7 @@ const PaymentScreen = () => {
                             {formatDateLong(fn.dateISO)}
                           </Text>
                           <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                            {statsPending || fn.statsStatus === "error"
+                            {fn.statsStatus !== "loaded"
                               ? "—"
                               : isInvitationOnly
                               ? `${formatInteger(fn.invitations)} invitaciones`

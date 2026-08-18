@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
-import { EventsStackParamList, EventsScreenNavigationProp } from "../navigation/types";
+import { AppScreenNavigationProp, AppStackParamList } from "../navigation/types";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -13,9 +13,7 @@ import { fetchSectors, fetchHistoryFor, type Sector } from "../lib/apiClient";
 import { formatCurrencyARS, formatDateLong, formatInteger, formatPercent } from "../lib/formatters";
 import type { HistoryDay } from "../lib/reportApi";
 
-type FunctionRoute = RouteProp<EventsStackParamList, "FunctionDetail">;
-
-const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+type FunctionRoute = RouteProp<AppStackParamList, "FunctionDetail">;
 
 const parseDayDate = (s: string): Date | null => {
   if (!s) return null;
@@ -58,12 +56,11 @@ const buildLastNDays = (rows: HistoryDay[], n: number): HistoryDay[] => {
 };
 
 const FunctionDetailScreen = () => {
-  const navigation = useNavigation<EventsScreenNavigationProp>();
+  const navigation = useNavigation<AppScreenNavigationProp>();
   const route = useRoute<FunctionRoute>();
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
-  const statsPending = events.statsPending;
 
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [sectorsLoading, setSectorsLoading] = useState(false);
@@ -132,7 +129,7 @@ const FunctionDetailScreen = () => {
   const grossRevenue = fn?.grossRevenueARS ?? 0;
   const ticketsSold = fn?.ticketsSold ?? 0;
   const avgPrice = ticketsSold > 0 ? grossRevenue / ticketsSold : 0;
-  const functionStatsUnavailable = statsPending || fn?.statsStatus === "error";
+  const functionStatsUnavailable = fn?.statsStatus !== "loaded";
 
   if (!event || !fn) {
     return (
