@@ -32,7 +32,7 @@ const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => 
 
 const EventsListScreen = () => {
   const navigation = useNavigation<EventsScreenNavigationProp>();
-  const { theme, events, loadEvents } = useAppState();
+  const { theme, events, loadEvents, retryFailedStats } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
   const [query, setQuery] = useState("");
@@ -78,6 +78,54 @@ const EventsListScreen = () => {
             />
 
             <View style={{ paddingHorizontal: 20 }}>
+              {events.error && events.data.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: palette.warning,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700" }}>
+                    No se pudo actualizar. Mostrando los datos anteriores.
+                  </Text>
+                </View>
+              ) : null}
+
+              {events.failedStatsIds.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: palette.surfaceMuted,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: palette.warning,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    marginBottom: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }}>
+                    Faltan estadísticas de {events.failedStatsIds.length} funciones.
+                  </Text>
+                  <Pressable
+                    disabled={events.statsRetrying || !accessToken}
+                    onPress={() => accessToken && retryFailedStats(accessToken)}
+                  >
+                    <Text style={{ color: palette.primary, fontSize: 12, fontWeight: "800" }}>
+                      {events.statsRetrying ? "Reintentando…" : "Reintentar"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               <View
                 style={{
                   backgroundColor: palette.surfaceMuted,
@@ -154,6 +202,9 @@ const EventsListScreen = () => {
         renderItem={({ item }) => {
           const fnCount = item.functions?.length ?? 1;
           const revenue = item.grossRevenueARS ?? item.ticketsSold * item.ticketPriceARS;
+          // Mientras faltan los importes mostramos un guion: un "0" se leería
+          // como que el evento no vendió nada.
+          const pending = item.statsStatus !== "loaded";
           return (
             <Pressable
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
@@ -190,11 +241,11 @@ const EventsListScreen = () => {
                   </View>
                   <Text style={{ color: palette.hairline }}>·</Text>
                   <Text style={{ color: palette.subtext, fontSize: 12 }}>
-                    {formatInteger(item.ticketsSold)} entradas
+                    {pending ? "— entradas" : `${formatInteger(item.ticketsSold)} entradas`}
                   </Text>
                   <Text style={{ color: palette.hairline }}>·</Text>
                   <Text style={{ color: palette.text, fontSize: 12, fontWeight: "700", flex: 1 }} numberOfLines={1}>
-                    {formatCurrencyARS(revenue)}
+                    {pending ? "—" : formatCurrencyARS(revenue)}
                   </Text>
                   <Feather name="chevron-right" size={16} color={palette.subtext} />
                 </View>

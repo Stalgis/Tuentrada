@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -36,6 +36,7 @@ const TrendDetailScreen = () => {
   const { theme, events } = useAppState();
   const { user } = useAuth();
   const palette = getPalette(theme);
+  const statsPending = events.statsPending;
 
   // Visible events based on eventId param
   const visibleEvents = useMemo(() => {
@@ -54,6 +55,8 @@ const TrendDetailScreen = () => {
   });
 
   const selectedEvent = visibleEvents[selectedIdx] ?? null;
+  const visibleStatsUnavailable =
+    statsPending || visibleEvents.some((event) => event.statsStatus === "error");
 
   // Bar chart data
   const chartData = useMemo(
@@ -112,10 +115,10 @@ const TrendDetailScreen = () => {
                 {formatDate(selectedEvent.dateISO)}
               </Text>
               <Text style={{ color: palette.text, fontSize: 34, fontWeight: "800", marginTop: 8, letterSpacing: -1 }}>
-                {formatCurrencyARS(getRevenue(selectedEvent))}
+                {visibleStatsUnavailable ? "—" : formatCurrencyARS(getRevenue(selectedEvent))}
               </Text>
               <Text style={{ color: palette.subtext, fontSize: 14, marginTop: 6 }}>
-                {formatInteger(selectedEvent.ticketsSold)} entradas vendidas
+                {visibleStatsUnavailable ? "Estadísticas no disponibles" : `${formatInteger(selectedEvent.ticketsSold)} entradas vendidas`}
               </Text>
             </SurfaceCard>
           ) : null}
@@ -127,10 +130,14 @@ const TrendDetailScreen = () => {
               <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
                 Tocá una barra para ver el detalle
               </Text>
-              <MiniBarChart
-                data={chartData}
-                highlightIndex={selectedIdx < chartData.length ? selectedIdx : undefined}
-              />
+              {visibleStatsUnavailable ? (
+                <ActivityIndicator color={palette.primary} style={{ marginVertical: 28 }} />
+              ) : (
+                <MiniBarChart
+                  data={chartData}
+                  highlightIndex={selectedIdx < chartData.length ? selectedIdx : undefined}
+                />
+              )}
             </SurfaceCard>
           )}
 
@@ -148,10 +155,10 @@ const TrendDetailScreen = () => {
                   minimumFontScale={0.7}
                   style={{ color: palette.text, fontSize: 17, fontWeight: "800", marginTop: 6 }}
                 >
-                  {formatCurrencyARS(totalRevenue)}
+                  {visibleStatsUnavailable ? "—" : formatCurrencyARS(totalRevenue)}
                 </Text>
                 <Text style={{ color: palette.subtext, fontSize: 10, marginTop: 4 }}>
-                  {formatInteger(totalTickets)} entradas
+                  {visibleStatsUnavailable ? "—" : `${formatInteger(totalTickets)} entradas`}
                 </Text>
               </View>
               <View style={{ flex: 1, backgroundColor: palette.surfaceMuted, borderRadius: 18, padding: 14 }}>
@@ -164,10 +171,10 @@ const TrendDetailScreen = () => {
                   minimumFontScale={0.7}
                   style={{ color: palette.text, fontSize: 17, fontWeight: "800", marginTop: 6 }}
                 >
-                  {bestEvent ? formatCurrencyARS(getRevenue(bestEvent)) : "—"}
+                  {!visibleStatsUnavailable && bestEvent ? formatCurrencyARS(getRevenue(bestEvent)) : "—"}
                 </Text>
                 <Text style={{ color: palette.subtext, fontSize: 10, marginTop: 4 }} numberOfLines={1}>
-                  {bestEvent ? bestEvent.name.split(" ")[0] : ""}
+                  {!visibleStatsUnavailable && bestEvent ? bestEvent.name.split(" ")[0] : ""}
                 </Text>
               </View>
               <View style={{ flex: 1, backgroundColor: palette.surfaceMuted, borderRadius: 18, padding: 14 }}>
@@ -180,7 +187,7 @@ const TrendDetailScreen = () => {
                   minimumFontScale={0.7}
                   style={{ color: palette.text, fontSize: 17, fontWeight: "800", marginTop: 6 }}
                 >
-                  {formatCurrencyARS(avgRevenue)}
+                  {visibleStatsUnavailable ? "—" : formatCurrencyARS(avgRevenue)}
                 </Text>
                 <Text style={{ color: palette.subtext, fontSize: 10, marginTop: 4 }}>
                   por función
@@ -196,7 +203,9 @@ const TrendDetailScreen = () => {
               Mayor ingreso primero
             </Text>
             <View style={{ marginTop: 16, gap: 8 }}>
-              {rankedEvents.map(({ event, originalIdx }) => {
+              {visibleStatsUnavailable ? (
+                <ActivityIndicator color={palette.primary} style={{ marginVertical: 8 }} />
+              ) : rankedEvents.map(({ event, originalIdx }) => {
                 const isSelected = originalIdx === selectedIdx;
                 return (
                   <Pressable

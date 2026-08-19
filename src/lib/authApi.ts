@@ -1,6 +1,15 @@
 // lib/authApi.tsx
 import type { User } from "./types";
 import { env } from "./env";
+import { backendFetch } from "./backendFetch";
+import {
+  AuthCredentialsError,
+  AuthResponseError,
+  AuthServerError,
+  authErrorForStatus,
+} from "./authErrors";
+
+export { AuthCredentialsError, AuthResponseError, AuthServerError } from "./authErrors";
 
 export type AuthTokens = {
   accessToken: string;
@@ -24,10 +33,17 @@ type LoginRawResponse = {
   };
 };
 
-type LoginNeedsPasswordChangeResponse = {
-  user: User;
-  sessionToken: string;
-};
+/**
+ * El proveedor administra las contraseñas: la app no ofrece cambio de
+ * contraseña. Si un backend viejo responde 403 pidiéndolo, se corta el login
+ * sin crear sesión ni guardar ningún token.
+ */
+export class PasswordManagedByProviderError extends Error {
+  constructor() {
+    super("Tu contraseña debe ser gestionada por tu proveedor. Contactalo para continuar.");
+    this.name = "PasswordManagedByProviderError";
+  }
+}
 
 const BASE_URL = env.apiUrl;
 const baseHeaders: Record<string, string> = {
@@ -47,14 +63,25 @@ const toTokens = (raw: LoginRawResponse): AuthTokens => ({
 
 // Como tu backend envía todo envuelto bajo { success, message, data, ... }
 const parseResponse = async (res: Response): Promise<LoginRawResponse> => {
-  const json = (await res.json()) as any;
-
-  if (!res.ok || json?.success === false) {
-    let message = "No se pudo autenticar";
-    if (json && typeof json.message === "string") {
-      message = json.message;
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    const message = "El servidor devolvió una respuesta inválida";
+    if (res.status >= 500) {
+      throw new AuthServerError(res.status, message);
     }
-    throw new Error(message);
+    throw new AuthResponseError(res.status, message);
+  }
+
+  const message =
+    typeof json?.message === "string" ? json.message : "No se pudo autenticar";
+
+  const statusError = authErrorForStatus(res.status, message);
+  if (statusError) throw statusError;
+
+  if (json?.success === false) {
+    throw new AuthResponseError(res.status, message);
   }
 
   return json as LoginRawResponse;
@@ -74,34 +101,40 @@ export const authApi = {
   async login(
     email: string,
     password: string
-  ): Promise<
-    | { status: "authenticated"; tokens: AuthTokens; user: User }
-    | { status: "needsPasswordChange"; user: User; sessionToken: string }
-  > {
-    const res = await fetch(`${BASE_URL}`, {
+  ): Promise<{ tokens: AuthTokens; user: User }> {
+    const res = await backendFetch(`${BASE_URL}`, {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ email, password }),
     });
 
+    // Un 403 puede ser el flujo antiguo de cambio de contraseña o cualquier
+    // otro rechazo. Solo el primero muestra el mensaje del proveedor; el resto
+    // se trata como credenciales rechazadas para no dar instrucciones erróneas.
     if (res.status === 403) {
-      const data = (await res.json()) as LoginNeedsPasswordChangeResponse;
-      return {
-        status: "needsPasswordChange",
-        user: data.user,
-        sessionToken: data.sessionToken,
-      };
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {
+        // cuerpo no-JSON: se trata como rechazo genérico
+      }
+
+      // La respuesta legacy se identifica por traer un token de cambio de
+      // contraseña. Se detecta para clasificarla, pero nunca se usa ni guarda.
+      if (payload && typeof payload.sessionToken === "string") {
+        throw new PasswordManagedByProviderError();
+      }
+
+      throw new AuthCredentialsError(
+        typeof payload?.message === "string" ? payload.message : "No se pudo autenticar",
+      );
     }
 
     const raw = await parseResponse(res);
     const tokens = toTokens(raw);
     const user = buildUserFromEmail(raw.data.email);
 
-    return {
-      status: "authenticated",
-      tokens,
-      user,
-    };
+    return { tokens, user };
   },
 
   async refresh(refreshToken: string) {
@@ -109,7 +142,7 @@ export const authApi = {
     // o que llame a otro endpoint cuando exista.
     // De momento, si alguien lo llama, va a tirar error y el bootstrapAuth
     // te va a mandar a "unauthenticated".
-    const res = await fetch(`${BASE_URL}/refresh`, {
+    const res = await backendFetch(`${BASE_URL}/refresh`, {
       method: "POST",
       headers: baseHeaders,
       body: JSON.stringify({ refreshToken }),

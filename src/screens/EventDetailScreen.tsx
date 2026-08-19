@@ -3,7 +3,7 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { EventsStackParamList, EventsScreenNavigationProp } from "../navigation/types";
+import { AppScreenNavigationProp, AppStackParamList } from "../navigation/types";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { getPalette } from "../lib/theme";
@@ -12,7 +12,7 @@ import SurfaceCard from "../components/stitch/SurfaceCard";
 import { formatCurrencyARS, formatDateLong, formatInteger } from "../lib/formatters";
 import type { EventFunction } from "../lib/types";
 
-type EventRoute = RouteProp<EventsStackParamList, "EventDetail">;
+type EventRoute = RouteProp<AppStackParamList, "EventDetail">;
 
 const statusLabel = (status: string) => {
   if (status === "sold_out") return "AGOTADO";
@@ -27,7 +27,7 @@ const statusColor = (status: string, palette: ReturnType<typeof getPalette>) => 
 };
 
 const EventDetailScreen = () => {
-  const navigation = useNavigation<EventsScreenNavigationProp>();
+  const navigation = useNavigation<AppScreenNavigationProp>();
   const route = useRoute<EventRoute>();
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
@@ -43,6 +43,7 @@ const EventDetailScreen = () => {
     () => events.data.find((e) => e.id === eventId),
     [events.data, eventId],
   );
+  const eventStatsUnavailable = event?.statsStatus !== "loaded";
 
   const functions: EventFunction[] = useMemo(
     () => event?.functions ?? [],
@@ -100,10 +101,12 @@ const EventDetailScreen = () => {
                   Total recaudado · todas las funciones
                 </Text>
                 <Text style={{ color: palette.text, fontSize: 34, fontWeight: "800", marginTop: 8 }}>
-                  {formatCurrencyARS(event.grossRevenueARS ?? 0)}
+                  {eventStatsUnavailable ? "—" : formatCurrencyARS(event.grossRevenueARS ?? 0)}
                 </Text>
                 <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                  {formatInteger(event.ticketsSold)} entradas · ticket promedio {formatCurrencyARS(event.ticketPriceARS)}
+                  {eventStatsUnavailable
+                    ? "Estadísticas cargando…"
+                    : `${formatInteger(event.ticketsSold)} entradas · ticket promedio ${formatCurrencyARS(event.ticketPriceARS)}`}
                 </Text>
               </SurfaceCard>
 
@@ -150,7 +153,8 @@ const EventDetailScreen = () => {
           </Pressable>
         ) : null}
         renderItem={({ item }) => {
-          const isAllInvitations = item.ticketsSold === 0 && item.invitations > 0;
+          const itemStatsUnavailable = item.statsStatus !== "loaded";
+          const isAllInvitations = !itemStatsUnavailable && item.ticketsSold === 0 && item.invitations > 0;
           return (
             <Pressable
               onPress={() => navigation.navigate("FunctionDetail", { functionId: item.id })}
@@ -163,11 +167,12 @@ const EventDetailScreen = () => {
                       {formatDateLong(item.dateISO)}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 4 }}>
-                      {formatInteger(item.ticketsSold)} entradas
-                      {item.invitations > 0 ? ` · ${formatInteger(item.invitations)} invitaciones` : ""}
+                      {itemStatsUnavailable
+                        ? "—"
+                        : `${formatInteger(item.ticketsSold)} entradas${item.invitations > 0 ? ` · ${formatInteger(item.invitations)} invitaciones` : ""}`}
                     </Text>
                     <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
-                      {formatCurrencyARS(item.grossRevenueARS)}
+                      {itemStatsUnavailable ? "—" : formatCurrencyARS(item.grossRevenueARS)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 }}>

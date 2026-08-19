@@ -12,16 +12,31 @@ import Constants from "expo-constants";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import type { PropsWithChildren } from "react";
-import { authApi, type AuthTokens } from "../lib/authApi";
+import {
+  authApi,
+  AuthCredentialsError,
+  PasswordManagedByProviderError,
+  type AuthTokens,
+} from "../lib/authApi";
+import { clearAllCaches } from "../lib/apiClient";
 import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
+import { bumpGeneration, currentGeneration, isCurrentGeneration } from "../lib/session";
 import type { User } from "../lib/types";
 
 export type AuthStatus = "checking" | "unauthenticated" | "authenticated";
+
+/**
+ * Motivo del cierre de sesión. Determina la política biométrica:
+ * solo el cierre manual borra las credenciales guardadas.
+ */
+export type SessionEndReason = "user" | "expired" | "unauthorized";
 
 type AuthContextValue = {
   status: AuthStatus;
   user?: User;
   accessToken?: string;
+  /** Cambia en cada inicio y cierre de sesión; usarla como `key` para remontar. */
+  sessionGeneration: number;
   biometricEnabled: boolean;
   biometricAvailable: boolean;
   shouldPromptBiometricEnrollment: boolean;
@@ -53,6 +68,7 @@ const AUTH_BYPASS_CONTEXT: AuthContextValue = {
   status: "authenticated",
   user: AUTH_BYPASS_USER,
   accessToken: "dev-bypass",
+  sessionGeneration: 0,
   biometricEnabled: false,
   biometricAvailable: false,
   shouldPromptBiometricEnrollment: false,
@@ -99,7 +115,12 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [shouldPromptBiometricEnrollment, setShouldPromptBiometricEnrollment] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sessionGeneration, setSessionGeneration] = useState(() => currentGeneration());
   const pendingCredentialsRef = useRef<StoredBiometricCredentials | null>(null);
+  // Lock de cierre atado a la generación: no se libera en un `finally` (eso
+  // permitiría que un timer viejo volviera a disparar el cierre), sino que deja
+  // de aplicar cuando arranca una sesión nueva.
+  const endingGenerationRef = useRef<number | null>(null);
 
   const clearBiometricStorage = useCallback(async () => {
     await Promise.all([
@@ -163,8 +184,18 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     }
   }, []);
 
-  const handleAuthSuccess = useCallback(
-    async ({ tokens, nextUser }: { tokens: AuthTokens; nextUser: User }) => {
+  /**
+   * Único punto de entrada a una sesión autenticada. Invalida la generación
+   * anterior y limpia cachés antes de publicar el token nuevo, de modo que
+   * ninguna respuesta en vuelo de la sesión previa pueda escribir después.
+   */
+  const startSession = useCallback(
+    ({ tokens, nextUser }: { tokens: AuthTokens; nextUser: User }) => {
+      const gen = bumpGeneration();
+      clearAllCaches();
+      endingGenerationRef.current = null;
+      setSessionGeneration(gen);
+      setSessionExpired(false);
       setAccessToken(tokens.accessToken);
       setUser(nextUser);
       setStatus("authenticated");
@@ -239,21 +270,16 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       setLoading(true);
       try {
         const normalizedEmail = email.trim();
+        // Si el backend pide cambio de contraseña, authApi lanza
+        // PasswordManagedByProviderError y no se crea sesión alguna.
         const response = await authApi.login(normalizedEmail, password);
-
-        if (response.status === "needsPasswordChange") {
-          setAccessToken(response.sessionToken);
-          setUser(response.user);
-          setStatus("authenticated");
-          return;
-        }
 
         pendingCredentialsRef.current = {
           email: normalizedEmail,
           password,
         };
 
-        await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
+        startSession({ tokens: response.tokens, nextUser: response.user });
 
         if (!biometricEnabled && biometricAvailable) {
           setShouldPromptBiometricEnrollment(true);
@@ -262,7 +288,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         setLoading(false);
       }
     },
-    [biometricAvailable, biometricEnabled, handleAuthSuccess],
+    [biometricAvailable, biometricEnabled, startSession],
   );
 
   const loginWithBiometric = useCallback(async () => {
@@ -280,15 +306,24 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         throw new Error("Tu acceso biométrico venció. Iniciá sesión con tu contraseña.");
       }
 
-      const response = await authApi.login(credentials.email, credentials.password);
-
-      if (response.status !== "authenticated") {
-        await clearBiometricStorage();
-        throw new Error("Necesitás iniciar sesión manualmente para reactivar biometría.");
+      let response;
+      try {
+        response = await authApi.login(credentials.email, credentials.password);
+      } catch (error) {
+        // Credenciales guardadas ya inválidas (el proveedor cambió la clave, o
+        // el backend pide gestión externa) → se borran. Un fallo de red NO
+        // borra nada: solo entran acá los rechazos con respuesta del servidor.
+        if (
+          error instanceof AuthCredentialsError ||
+          error instanceof PasswordManagedByProviderError
+        ) {
+          await clearBiometricStorage();
+        }
+        throw error;
       }
 
       pendingCredentialsRef.current = credentials;
-      await handleAuthSuccess({ tokens: response.tokens, nextUser: response.user });
+      startSession({ tokens: response.tokens, nextUser: response.user });
       setShouldPromptBiometricEnrollment(false);
     } catch (error) {
       if (error instanceof Error && error.message === "user_cancel") {
@@ -298,29 +333,64 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     } finally {
       setLoading(false);
     }
-  }, [biometricEnabled, clearBiometricStorage, handleAuthSuccess, promptBiometric, readBiometricCredentials]);
+  }, [biometricEnabled, clearBiometricStorage, promptBiometric, readBiometricCredentials, startSession]);
+
+  /**
+   * Único punto de salida. Idempotente por generación: el timer de expiración,
+   * un 401 y el listener de AppState pueden llamarlo a la vez sin duplicar.
+   *
+   * La limpieza local ocurre antes de tocar la red; el token se captura en un
+   * snapshot para poder avisar al servidor después de haber limpiado el estado.
+   */
+  const endSession = useCallback(
+    async ({ reason }: { reason: SessionEndReason }) => {
+      // El lock apunta a la generación *resultante* del cierre: tras el bump,
+      // una segunda llamada lee esa misma generación y sale. Guardar la
+      // generación previa no serviría, porque el bump la deja obsoleta al
+      // instante y toda llamada posterior volvería a entrar.
+      if (endingGenerationRef.current === currentGeneration()) return;
+
+      const tokenSnapshot = accessToken;
+
+      // 1) invalidar generación y limpiar todo lo local
+      const nextGen = bumpGeneration();
+      endingGenerationRef.current = nextGen;
+      clearAllCaches();
+      setSessionGeneration(nextGen);
+      setStatus("unauthenticated");
+      setUser(undefined);
+      setAccessToken(undefined);
+      pendingCredentialsRef.current = null;
+      setShouldPromptBiometricEnrollment(false);
+
+      // 2) política biométrica: solo el cierre manual borra las credenciales
+      if (reason === "user") {
+        await clearBiometricStorage();
+      }
+
+      // 3) aviso al servidor, sin bloquear la UI
+      if (tokenSnapshot) {
+        logoutApi(tokenSnapshot);
+      }
+    },
+    [accessToken, clearBiometricStorage],
+  );
 
   const logout = useCallback(async () => {
-    // Fire-and-forget: notify server without blocking UI
-    if (accessToken) {
-      logoutApi(accessToken);
-    }
-    setStatus("unauthenticated");
-    setUser(undefined);
-    setAccessToken(undefined);
-    pendingCredentialsRef.current = null;
-    setShouldPromptBiometricEnrollment(false);
-    await clearBiometricStorage();
-  }, [accessToken, clearBiometricStorage]);
+    await endSession({ reason: "user" });
+  }, [endSession]);
 
   useEffect(() => {
-    // 401 from any report API call → drop session + redirect to login
-    setOnUnauthorized(() => {
+    // 401 from any report API call → drop session + redirect to login.
+    // Se ignora si proviene de una sesión anterior: una respuesta tardía de la
+    // cuenta A no debe desconectar a la cuenta B.
+    setOnUnauthorized((gen) => {
+      if (!isCurrentGeneration(gen)) return;
       setSessionExpired(true);
-      logout();
+      endSession({ reason: "unauthorized" });
     });
     return () => setOnUnauthorized(null);
-  }, [logout]);
+  }, [endSession]);
 
   const dismissBiometricEnrollmentPrompt = useCallback(() => {
     setShouldPromptBiometricEnrollment(false);
@@ -331,6 +401,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       status,
       user,
       accessToken,
+      sessionGeneration,
       biometricEnabled,
       biometricAvailable,
       shouldPromptBiometricEnrollment,
@@ -355,6 +426,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       loginWithBiometric,
       logout,
       sessionExpired,
+      sessionGeneration,
       shouldPromptBiometricEnrollment,
       status,
       user,

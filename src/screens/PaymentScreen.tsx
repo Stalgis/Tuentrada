@@ -1,26 +1,39 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Dropdown } from "react-native-element-dropdown";
 import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { Dropdown } from "react-native-element-dropdown";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
 import { fetchPaymentsForEvent, type PaymentRow } from "../lib/apiClient";
-import { formatCurrencyARS, formatDateLong, formatInteger } from "../lib/formatters";
+import {
+  getEventFunctionIds,
+  getEventsFunctionIds,
+  getIdsKey,
+} from "../lib/eventIds";
+import {
+  formatCurrencyARS,
+  formatDateLong,
+  formatInteger,
+} from "../lib/formatters";
+import { getPalette } from "../lib/theme";
+import type { EventFunction } from "../lib/types";
+import type { TabScreenNavigationProp } from "../navigation/types";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
-import { getPalette } from "../lib/theme";
-import type { TabScreenNavigationProp } from "../navigation/types";
-import type { EventFunction } from "../lib/types";
 
-type PeriodKey = "all" | "today" | "this_week" | "this_month" | "last_month";
+type PeriodKey = "this_week" | "last_week";
 
-const periodOptions: { key: PeriodKey; label: string }[] = [
-  { key: "all", label: "Todo" },
+const eventPeriodOptions: { key: PeriodKey; label: string }[] = [
   { key: "this_week", label: "Esta semana" },
-  { key: "this_month", label: "Este mes" },
-  { key: "last_month", label: "Mes anterior" },
+  { key: "last_week", label: "Semana anterior" },
 ];
 
 const prettyName = (raw: string): string => {
@@ -38,10 +51,11 @@ const PaymentScreen = () => {
   const { theme, events, loadEvents } = useAppState();
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
-
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
-  const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null);
-  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(
+    null,
+  );
+  const [period, setPeriod] = useState<PeriodKey>("this_week");
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +75,10 @@ const PaymentScreen = () => {
   useEffect(() => {
     if (activeEvents.length === 1) {
       setSelectedEventId(activeEvents[0].id);
-    } else if (selectedEventId !== "all" && !activeEvents.some((e) => e.id === selectedEventId)) {
+    } else if (
+      selectedEventId !== "all" &&
+      !activeEvents.some((e) => e.id === selectedEventId)
+    ) {
       setSelectedEventId("all");
     }
   }, [activeEvents, selectedEventId]);
@@ -84,27 +101,50 @@ const PaymentScreen = () => {
   );
 
   const eventOptions = useMemo(
-    () => [allEventsOption, ...activeEvents.map((e) => ({ key: e.id, value: e.name }))],
+    () => [
+      allEventsOption,
+      ...activeEvents.map((e) => ({ key: e.id, value: e.name })),
+    ],
     [activeEvents],
   );
 
-  // API id: use selected function when drilling, otherwise global (undefined = all data)
-  const apiId = selectedFunctionId ?? undefined;
+  const requestIds = useMemo(() => {
+    if (selectedFunctionId) return [selectedFunctionId];
+    return selectedEvent
+      ? getEventFunctionIds(selectedEvent)
+      : getEventsFunctionIds(events.data);
+  }, [events.data, selectedEvent, selectedFunctionId]);
+  const requestIdsKey = getIdsKey(requestIds);
+  const periodOptions = eventPeriodOptions;
 
   useEffect(() => {
-    if (!accessToken) return;
+    const ids = requestIdsKey.split(",").filter(Boolean);
+    if (!accessToken || ids.length === 0) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setShowAll(false);
     setShowAllFunctions(false);
-    fetchPaymentsForEvent(accessToken, apiId ?? "", period)
-      .then(setRows)
-      .catch((err) => {
-        setRows([]);
-        setError(err instanceof Error ? err.message : "No se pudieron cargar los medios de pago.");
+    fetchPaymentsForEvent(accessToken, ids, period)
+      .then((nextRows) => {
+        if (!cancelled) setRows(nextRows);
       })
-      .finally(() => setLoading(false));
-  }, [accessToken, apiId, period]);
+      .catch((err) => {
+        if (cancelled) return;
+        setRows([]);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudieron cargar los medios de pago.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, period, requestIdsKey]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => b.sold_tickets - a.sold_tickets),
@@ -125,9 +165,10 @@ const PaymentScreen = () => {
   );
 
   const top = sorted[0] ?? null;
-  const topPct = top && totals.sold_tickets > 0
-    ? (top.sold_tickets / totals.sold_tickets) * 100
-    : 0;
+  const topPct =
+    top && totals.sold_tickets > 0
+      ? (top.sold_tickets / totals.sold_tickets) * 100
+      : 0;
 
   const visibleRows = showAll ? sorted : sorted.slice(0, 5);
 
@@ -138,13 +179,22 @@ const PaymentScreen = () => {
       : `${activeEvents.length} evento${activeEvents.length !== 1 ? "s" : ""}`;
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.background }}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={{ flex: 1, backgroundColor: palette.background }}
+    >
       <ScrollView contentContainerStyle={{ paddingBottom: 34 }}>
         <AppHeader
           title="Medios de pago"
-          subtitle={selectedFunctionId ? "Vista por función" : "Distribución por gateway"}
+          subtitle={
+            selectedFunctionId
+              ? "Vista por función"
+              : "Distribución por gateway"
+          }
           pillLabel={pillLabel}
-          onBackPress={selectedFunctionId ? () => setSelectedFunctionId(null) : undefined}
+          onBackPress={
+            selectedFunctionId ? () => setSelectedFunctionId(null) : undefined
+          }
           onAvatarPress={() => navigation.navigate("Profile")}
           avatarInitials={user?.initials}
         />
@@ -153,11 +203,22 @@ const PaymentScreen = () => {
           {/* Event selector — only when multiple events */}
           {activeEvents.length > 1 && (
             <SurfaceCard style={{ paddingVertical: 16, borderWidth: 1 }}>
-              <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 }}>
+              <Text
+                style={{
+                  color: palette.subtext,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
                 Evento
               </Text>
               {events.status === "loading" && events.data.length === 0 ? (
-                <ActivityIndicator color={palette.primary} style={{ marginTop: 16, marginBottom: 8 }} />
+                <ActivityIndicator
+                  color={palette.primary}
+                  style={{ marginTop: 16, marginBottom: 8 }}
+                />
               ) : (
                 <Dropdown
                   data={eventOptions}
@@ -173,7 +234,8 @@ const PaymentScreen = () => {
                     minHeight: 56,
                     borderRadius: 18,
                     borderWidth: 1,
-                    borderColor: theme === "dark" ? palette.border : palette.primarySoft,
+                    borderColor:
+                      theme === "dark" ? palette.border : palette.primarySoft,
                     backgroundColor: palette.surface,
                     paddingHorizontal: 16,
                   }}
@@ -185,9 +247,17 @@ const PaymentScreen = () => {
                     overflow: "hidden",
                   }}
                   placeholderStyle={{ color: palette.subtext, fontSize: 15 }}
-                  selectedTextStyle={{ color: palette.text, fontSize: 15, fontWeight: "700" }}
+                  selectedTextStyle={{
+                    color: palette.text,
+                    fontSize: 15,
+                    fontWeight: "700",
+                  }}
                   itemTextStyle={{ color: palette.text, fontSize: 15 }}
-                  activeColor={theme === "dark" ? palette.surfaceMuted : palette.primarySoft}
+                  activeColor={
+                    theme === "dark"
+                      ? palette.surfaceMuted
+                      : palette.primarySoft
+                  }
                   iconColor={palette.primary}
                   maxHeight={320}
                   placeholder="Seleccioná un evento"
@@ -198,7 +268,14 @@ const PaymentScreen = () => {
 
           {/* Selected function date/time */}
           {selectedFunctionId && selectedFunction && (
-            <Text style={{ color: palette.subtext, fontSize: 13, fontWeight: "700", paddingHorizontal: 2 }}>
+            <Text
+              style={{
+                color: palette.subtext,
+                fontSize: 13,
+                fontWeight: "700",
+                paddingHorizontal: 2,
+              }}
+            >
               {formatDateLong(selectedFunction.dateISO)}
             </Text>
           )}
@@ -220,9 +297,23 @@ const PaymentScreen = () => {
                     borderColor: active ? palette.primary : palette.hairline,
                   }}
                 >
-                  <Text style={{ color: active ? "#fff" : palette.subtext, fontSize: 12, fontWeight: "700" }}>
-                    {opt.label}
-                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: active ? "#fff" : palette.subtext,
+                        fontSize: 12,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -230,30 +321,65 @@ const PaymentScreen = () => {
 
           {/* Hero: top method */}
           <SurfaceCard tone="hero">
-            <Text style={{ color: palette.subtext, fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
+            <Text
+              style={{
+                color: palette.subtext,
+                fontSize: 12,
+                fontWeight: "700",
+                textTransform: "uppercase",
+              }}
+            >
               Método dominante
             </Text>
             {loading ? (
-              <ActivityIndicator color={palette.primary} style={{ marginTop: 16, alignSelf: "flex-start" }} />
+              <ActivityIndicator
+                color={palette.primary}
+                style={{ marginTop: 16, alignSelf: "flex-start" }}
+              />
             ) : top ? (
               <>
-                <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 10, gap: 12 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    marginTop: 10,
+                    gap: 12,
+                  }}
+                >
                   <Text
                     numberOfLines={1}
-                    style={{ color: palette.text, fontSize: 26, fontWeight: "800", letterSpacing: -0.5, flex: 1 }}
+                    style={{
+                      color: palette.text,
+                      fontSize: 26,
+                      fontWeight: "800",
+                      letterSpacing: -0.5,
+                      flex: 1,
+                    }}
                   >
                     {prettyName(top.payment_name)}
                   </Text>
-                  <Text style={{ color: palette.text, fontSize: 22, fontWeight: "800" }}>
+                  <Text
+                    style={{
+                      color: palette.text,
+                      fontSize: 22,
+                      fontWeight: "800",
+                    }}
+                  >
                     {topPct.toFixed(1)}%
                   </Text>
                 </View>
-                <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}>
-                  {formatCurrencyARS(totals.total_revenue)} en {formatInteger(totals.sold_tickets)} ventas totales
+                <Text
+                  style={{ color: palette.subtext, fontSize: 13, marginTop: 6 }}
+                >
+                  {formatCurrencyARS(totals.total_revenue)} en{" "}
+                  {formatInteger(totals.sold_tickets)} ventas totales
                 </Text>
               </>
             ) : (
-              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 12 }}>
+              <Text
+                style={{ color: palette.subtext, fontSize: 13, marginTop: 12 }}
+              >
                 Sin ventas registradas en el período.
               </Text>
             )}
@@ -261,21 +387,48 @@ const PaymentScreen = () => {
 
           {error && (
             <SurfaceCard>
-              <Text style={{ color: palette.danger, fontSize: 14, fontWeight: "700" }}>{error}</Text>
+              <Text
+                style={{
+                  color: palette.danger,
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                {error}
+              </Text>
               <Pressable
                 onPress={() => {
                   if (accessToken) {
                     setLoading(true);
                     setError(null);
-                    fetchPaymentsForEvent(accessToken, apiId ?? "", period)
+                    fetchPaymentsForEvent(
+                      accessToken,
+                      requestIds,
+                      period,
+                    )
                       .then(setRows)
-                      .catch((err) => setError(err instanceof Error ? err.message : "Error"))
+                      .catch((err) => {
+                        const message =
+                          err instanceof Error ? err.message : "Error";
+                        setError(message);
+                      })
                       .finally(() => setLoading(false));
                   }
                 }}
-                style={{ marginTop: 12, alignSelf: "flex-start", backgroundColor: palette.primary, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 }}
+                style={{
+                  marginTop: 12,
+                  alignSelf: "flex-start",
+                  backgroundColor: palette.primary,
+                  borderRadius: 999,
+                  paddingHorizontal: 18,
+                  paddingVertical: 10,
+                }}
               >
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Reintentar</Text>
+                <Text
+                  style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}
+                >
+                  Reintentar
+                </Text>
               </Pressable>
             </SurfaceCard>
           )}
@@ -283,26 +436,71 @@ const PaymentScreen = () => {
           {/* Breakdown */}
           {!loading && !error && sorted.length > 0 && (
             <SurfaceCard>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Desglose</Text>
-                <Text style={{ color: palette.subtext, fontSize: 12 }}>{sorted.length} métodos</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: 18,
+                    fontWeight: "800",
+                  }}
+                >
+                  Desglose
+                </Text>
+                <Text style={{ color: palette.subtext, fontSize: 12 }}>
+                  {sorted.length} métodos
+                </Text>
               </View>
               <View style={{ marginTop: 16, gap: 14 }}>
                 {visibleRows.map((row) => {
-                  const pct = totals.sold_tickets > 0
-                    ? (row.sold_tickets / totals.sold_tickets) * 100
-                    : 0;
+                  const pct =
+                    totals.sold_tickets > 0
+                      ? (row.sold_tickets / totals.sold_tickets) * 100
+                      : 0;
                   return (
                     <View key={row.payment_name}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-                        <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700", flex: 1, marginRight: 12 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: palette.text,
+                            fontSize: 14,
+                            fontWeight: "700",
+                            flex: 1,
+                            marginRight: 12,
+                          }}
+                        >
                           {prettyName(row.payment_name)}
                         </Text>
-                        <Text style={{ color: palette.subtext, fontSize: 13, fontWeight: "700" }}>
+                        <Text
+                          style={{
+                            color: palette.subtext,
+                            fontSize: 13,
+                            fontWeight: "700",
+                          }}
+                        >
                           {pct.toFixed(1)}%
                         </Text>
                       </View>
-                      <View style={{ backgroundColor: palette.surfaceMuted, height: 8, borderRadius: 999, overflow: "hidden" }}>
+                      <View
+                        style={{
+                          backgroundColor: palette.surfaceMuted,
+                          height: 8,
+                          borderRadius: 999,
+                          overflow: "hidden",
+                        }}
+                      >
                         <View
                           style={{
                             width: `${Math.min(pct, 100)}%`,
@@ -312,17 +510,35 @@ const PaymentScreen = () => {
                           }}
                         />
                       </View>
-                      <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 6 }}>
-                        {formatInteger(row.sold_tickets)} ventas · {formatCurrencyARS(row.total_revenue)}
+                      <Text
+                        style={{
+                          color: palette.subtext,
+                          fontSize: 12,
+                          marginTop: 6,
+                        }}
+                      >
+                        {formatInteger(row.sold_tickets)} ventas ·{" "}
+                        {formatCurrencyARS(row.total_revenue)}
                       </Text>
                     </View>
                   );
                 })}
               </View>
               {sorted.length > 5 && (
-                <Pressable onPress={() => setShowAll((s) => !s)} style={{ marginTop: 14, alignSelf: "flex-start" }}>
-                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-                    {showAll ? "Mostrar menos" : `Mostrar ${sorted.length - 5} más`}
+                <Pressable
+                  onPress={() => setShowAll((s) => !s)}
+                  style={{ marginTop: 14, alignSelf: "flex-start" }}
+                >
+                  <Text
+                    style={{
+                      color: palette.primary,
+                      fontSize: 13,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {showAll
+                      ? "Mostrar menos"
+                      : `Mostrar ${sorted.length - 5} más`}
                   </Text>
                 </Pressable>
               )}
@@ -331,7 +547,13 @@ const PaymentScreen = () => {
 
           {!loading && !error && sorted.length === 0 && (
             <SurfaceCard>
-              <Text style={{ color: palette.subtext, fontSize: 14, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: palette.subtext,
+                  fontSize: 14,
+                  textAlign: "center",
+                }}
+              >
                 Sin datos de medios de pago para el período seleccionado.
               </Text>
             </SurfaceCard>
@@ -340,13 +562,26 @@ const PaymentScreen = () => {
           {/* Functions list — drill down into a specific function */}
           {!selectedFunctionId && selectedFunctions.length > 0 && (
             <SurfaceCard>
-              <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}>Ver por función</Text>
-              <Text style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}>
+              <Text
+                style={{ color: palette.text, fontSize: 18, fontWeight: "800" }}
+              >
+                Ver por función
+              </Text>
+              <Text
+                style={{ color: palette.subtext, fontSize: 13, marginTop: 2 }}
+              >
                 Tocá una función para ver su desglose
               </Text>
               <View style={{ marginTop: 14, gap: 10 }}>
-                {(showAllFunctions ? selectedFunctions : selectedFunctions.slice(0, 5)).map((fn) => {
-                  const isInvitationOnly = fn.ticketsSold === 0 && fn.grossRevenueARS === 0;
+                {(showAllFunctions
+                  ? selectedFunctions
+                  : selectedFunctions.slice(0, 5)
+                ).map((fn) => {
+                  const isInvitationOnly =
+                    fn.statsStatus === "loaded" &&
+                    fn.ticketsSold === 0 &&
+                    fn.grossRevenueARS === 0 &&
+                    fn.invitations > 0;
                   return (
                     <Pressable
                       key={fn.id}
@@ -364,13 +599,28 @@ const PaymentScreen = () => {
                         }}
                       >
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: palette.text,
+                              fontSize: 14,
+                              fontWeight: "700",
+                            }}
+                          >
                             {formatDateLong(fn.dateISO)}
                           </Text>
-                          <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
-                            {isInvitationOnly
-                              ? `${formatInteger(fn.invitations)} invitaciones`
-                              : `${formatInteger(fn.ticketsSold)} entradas · ${formatCurrencyARS(fn.grossRevenueARS)}`}
+                          <Text
+                            style={{
+                              color: palette.subtext,
+                              fontSize: 12,
+                              marginTop: 2,
+                            }}
+                          >
+                            {fn.statsStatus !== "loaded"
+                              ? "—"
+                              : isInvitationOnly
+                                ? `${formatInteger(fn.invitations)} invitaciones`
+                                : `${formatInteger(fn.ticketsSold)} entradas · ${formatCurrencyARS(fn.grossRevenueARS)}`}
                           </Text>
                         </View>
                         {isInvitationOnly && (
@@ -383,12 +633,23 @@ const PaymentScreen = () => {
                               marginLeft: 10,
                             }}
                           >
-                            <Text style={{ color: palette.primary, fontSize: 11, fontWeight: "800" }}>
+                            <Text
+                              style={{
+                                color: palette.primary,
+                                fontSize: 11,
+                                fontWeight: "800",
+                              }}
+                            >
                               Invitación
                             </Text>
                           </View>
                         )}
-                        <Feather name="chevron-right" size={16} color={palette.subtext} style={{ marginLeft: 10 }} />
+                        <Feather
+                          name="chevron-right"
+                          size={16}
+                          color={palette.subtext}
+                          style={{ marginLeft: 10 }}
+                        />
                       </View>
                     </Pressable>
                   );
@@ -399,8 +660,16 @@ const PaymentScreen = () => {
                   onPress={() => setShowAllFunctions((s) => !s)}
                   style={{ marginTop: 14, alignSelf: "flex-start" }}
                 >
-                  <Text style={{ color: palette.primary, fontSize: 13, fontWeight: "700" }}>
-                    {showAllFunctions ? "Ver menos" : `Ver todas (${selectedFunctions.length - 5} más)`}
+                  <Text
+                    style={{
+                      color: palette.primary,
+                      fontSize: 13,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {showAllFunctions
+                      ? "Ver menos"
+                      : `Ver todas (${selectedFunctions.length - 5} más)`}
                   </Text>
                 </Pressable>
               )}
