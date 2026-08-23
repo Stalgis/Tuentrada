@@ -9,10 +9,14 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "agent:lab": "node --env-file-if-exists=.env labs/agent-sdk/cli.mjs",
+    "agent:lab:live": "node --env-file-if-exists=.env labs/agent-sdk/cli.mjs --live",
+    "agent:server": "node --env-file-if-exists=.env server/agent-service/index.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@openai/agents": "^0.17.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/drawer": "^7.7.9",
     "@react-navigation/elements": "^2.6.3",
