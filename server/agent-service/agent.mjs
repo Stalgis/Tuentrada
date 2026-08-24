@@ -1,8 +1,6 @@
 import { Agent, run, tool } from "@openai/agents";
 import { z } from "zod";
 
-const periodSchema = z.enum(["this_week", "last_week"]);
-
 const requireAppContext = (runContext) => {
   if (!runContext?.context) {
     throw new Error("El agente se ejecutó sin contexto autenticado.");
@@ -10,57 +8,43 @@ const requireAppContext = (runContext) => {
   return runContext.context;
 };
 
-const listEventsTool = tool({
-  name: "listar_eventos",
-  description: "Lista los eventos accesibles para el usuario autenticado.",
-  parameters: z.object({}),
-  execute: async (_input, runContext) => {
-    const { user, reports, audit } = requireAppContext(runContext);
-    audit("listar_eventos", {});
-    return reports.listEvents(user.id);
-  },
-});
+const normalize = (value) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es");
 
-const getStatsTool = tool({
-  name: "obtener_estadisticas",
+const searchEventsTool = tool({
+  name: "buscar_eventos",
   description:
-    "Obtiene entradas vendidas y recaudación de un evento en un período concreto.",
+    "Busca o lista eventos reales accesibles para el usuario autenticado. Usar antes de afirmar nombres, cantidad o fechas de eventos.",
   parameters: z.object({
-    evento: z.string().min(1).describe("Nombre del evento"),
-    periodo: periodSchema,
+    consulta: z
+      .string()
+      .max(100)
+      .nullable()
+      .describe("Texto opcional para filtrar por nombre; null para listar todos"),
+    limite: z.number().int().min(1).max(30),
   }),
-  execute: async ({ evento, periodo }, runContext) => {
-    const { user, reports, audit } = requireAppContext(runContext);
-    audit("obtener_estadisticas", { evento, periodo });
-    return reports.getEventStats(user.id, evento, periodo);
-  },
-});
+  errorFunction: null,
+  execute: async ({ consulta, limite }, runContext) => {
+    const { reports, audit } = requireAppContext(runContext);
+    audit("buscar_eventos", { consulta, limite });
+    const events = await reports.listEvents();
+    const filtered = consulta
+      ? events.filter((event) => normalize(event.name).includes(normalize(consulta)))
+      : events;
 
-const compareEventsTool = tool({
-  name: "comparar_eventos",
-  description:
-    "Compara entradas y recaudación de dos eventos accesibles en el mismo período.",
-  parameters: z.object({
-    eventoA: z.string().min(1),
-    eventoB: z.string().min(1),
-    periodo: periodSchema,
-  }),
-  execute: async ({ eventoA, eventoB, periodo }, runContext) => {
-    const { user, reports, audit } = requireAppContext(runContext);
-    audit("comparar_eventos", { eventoA, eventoB, periodo });
-    return reports.compareEvents(user.id, eventoA, eventoB, periodo);
-  },
-});
-
-const comparePeriodsTool = tool({
-  name: "comparar_periodos",
-  description:
-    "Compara esta semana contra la anterior para un evento y devuelve variaciones calculadas.",
-  parameters: z.object({ evento: z.string().min(1) }),
-  execute: async ({ evento }, runContext) => {
-    const { user, reports, audit } = requireAppContext(runContext);
-    audit("comparar_periodos", { evento });
-    return reports.comparePeriods(user.id, evento);
+    return {
+      totalAccessible: events.length,
+      totalMatches: filtered.length,
+      truncated: filtered.length > limite,
+      events: filtered.slice(0, limite).map(({ name, dateISO, status }) => ({
+        name,
+        dateISO,
+        status,
+      })),
+    };
   },
 });
 
@@ -68,18 +52,19 @@ export const tuentradaAgent = new Agent({
   name: "Analista de Tuentrada",
   model: process.env.OPENAI_AGENT_MODEL || "gpt-5.6-terra",
   instructions: `
-Sos el analista de ventas de eventos de Tuentrada.
+Sos el analista de eventos de Tuentrada en una prueba limitada con datos reales.
 
-Objetivo: responder en español rioplatense preguntas sobre los eventos del usuario autenticado.
+Objetivo: ayudar al usuario a encontrar y contar sus eventos accesibles.
 
 Reglas:
-- Usá herramientas para toda afirmación sobre eventos, entradas o dinero.
-- Nunca inventes eventos, cifras, tendencias ni causas.
-- Conservá los cálculos entregados por las herramientas; no los recalcules.
-- Si falta un dato indispensable, pedí únicamente ese dato.
-- Respondé primero con la conclusión y después con las cifras que la respaldan.
+- Usá buscar_eventos antes de afirmar nombres, cantidades, estados o fechas.
+- Sólo podés responder sobre el catálogo de eventos. Estadísticas, ventas, pagos, sectores y comparaciones todavía no están habilitados.
+- Si piden una capacidad no habilitada, explicalo brevemente y ofrecé listar o buscar eventos.
+- Nunca inventes eventos ni completes nombres o fechas ausentes.
+- Si el resultado está truncado, decilo.
+- Respondé en español rioplatense y de forma breve.
 `,
-  tools: [listEventsTool, getStatsTool, compareEventsTool, comparePeriodsTool],
+  tools: [searchEventsTool],
 });
 
 export const answerWithAgent = async ({ message, user, reports, signal }) => {
@@ -90,9 +75,9 @@ export const answerWithAgent = async ({ message, user, reports, signal }) => {
       reports,
       audit: (toolName, parameters) => toolCalls.push({ toolName, parameters }),
     },
-    maxTurns: 6,
+    maxTurns: 4,
     signal,
-    workflowName: "Tuentrada agent service",
+    workflowName: "Tuentrada real-data catalog test",
   });
 
   return {

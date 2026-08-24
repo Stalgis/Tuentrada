@@ -24,6 +24,7 @@ export type AppStackParamList = {
   TrendDetail: { eventId: string; selectedIndex?: number };
   EventDetail: { eventId: string };
   FunctionDetail: { functionId: string };
+  AgentChat: undefined;
 };
 
 /**

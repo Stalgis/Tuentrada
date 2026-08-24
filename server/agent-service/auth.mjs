@@ -1,3 +1,9 @@
+import { createHash } from "node:crypto";
+import {
+  ReportAuthenticationError,
+  ReportTimeoutError,
+} from "./reportApiClient.mjs";
+
 export class AuthenticationError extends Error {
   constructor(message = "No autorizado") {
     super(message);
@@ -5,19 +11,51 @@ export class AuthenticationError extends Error {
   }
 }
 
-/**
- * Autenticación deliberadamente simple para aprender el flujo del servicio.
- * En producción, esta función deberá validar el token con el backend de Tuentrada
- * y devolver la identidad real asociada a él.
- */
-export const authenticateRequest = (request, expectedToken) => {
+const extractBearerToken = (request) => {
   const authorization = request.headers.authorization ?? "";
-  const [scheme, token] = authorization.split(" ");
+  const [scheme, token, extra] = authorization.split(" ");
 
-  if (scheme !== "Bearer" || !token || token !== expectedToken) {
+  if (scheme !== "Bearer" || !token || extra) {
     throw new AuthenticationError();
   }
 
-  // Este id nace de la autenticación, nunca del body ni de una tool call.
-  return { id: "demo-user" };
+  return token;
 };
+
+const tokenFingerprint = (token) =>
+  createHash("sha256").update(token).digest("hex").slice(0, 16);
+
+/**
+ * La validación ocurre contra el backend real antes de invocar a OpenAI.
+ * El token nunca entra al prompt, a los parámetros de tools ni a los logs.
+ */
+export const createUpstreamAuthenticator = ({ createReports }) =>
+  async (request) => {
+    const token = extractBearerToken(request);
+    const reports = createReports(token);
+
+    try {
+      await reports.validateAccess();
+    } catch (error) {
+      if (error instanceof ReportAuthenticationError) {
+        throw new AuthenticationError("La sesión venció o no es válida.");
+      }
+      if (error instanceof ReportTimeoutError) {
+        error.httpStatus = 504;
+        error.publicMessage = "El backend de reportes tardó demasiado en responder.";
+      }
+      throw error;
+    }
+
+    return {
+      user: { id: `session-${tokenFingerprint(token)}` },
+      reports,
+    };
+  };
+
+export const createDemoAuthenticator = ({ expectedToken, reports }) =>
+  async (request) => {
+    const token = extractBearerToken(request);
+    if (token !== expectedToken) throw new AuthenticationError();
+    return { user: { id: "demo-user" }, reports };
+  };

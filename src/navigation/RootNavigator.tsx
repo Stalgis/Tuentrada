@@ -15,6 +15,7 @@ import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
 import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
+import AgentChat from "@/screens/AgentChat";
 import { getNavigationTheme } from "../lib/theme";
 import {
   EventsStackParamList,
@@ -124,6 +125,7 @@ const AppNavigator = () => (
     <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
     <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
     <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
+    <AppStack.Screen name="AgentChat" component={AgentChat} />
   </AppStack.Navigator>
 );
 

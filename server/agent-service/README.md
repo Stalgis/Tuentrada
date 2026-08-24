@@ -1,83 +1,86 @@
 # Servicio Node del agente
 
-Esta primera versión enseña la separación entre HTTP, autenticación, ejecución
-del agente y acceso a reportes. Usa datos ficticios, pero realiza una llamada
-real a OpenAI.
+Esta fase conecta una única herramienta de solo lectura al catálogo real del
+usuario autenticado. Todavía no consulta ventas, recaudación, pagos ni sectores.
 
-## Arquitectura
+## Flujo
 
 ```text
-POST /api/agent/chat
-        │
-        ├── auth.mjs              valida el Bearer token y obtiene el usuario
-        ├── httpServer.mjs        valida HTTP, JSON, tamaño y timeout
-        ├── agent.mjs             ejecuta el Agents SDK con RunContext
-        └── demoReportClient.mjs  accede a los datos ficticios
+Expo AuthProvider
+  -> Authorization: Bearer <accessToken>
+  -> POST /api/agent/chat
+  -> validación contra /api/v2/report/event-list
+  -> ReportApiClient ligado a esa sesión
+  -> RunContext local
+  -> tool buscar_eventos
+  -> respuesta del agente
 ```
 
-El `user.id` no forma parte de los parámetros de las herramientas. Nace de la
-autenticación y viaja en el contexto local de la ejecución.
+El token no forma parte del prompt, de los parámetros de la herramienta ni de
+la respuesta. Antes de gastar una llamada a OpenAI, el servicio verifica que el
+backend real acepte la sesión.
 
-## Ejecutar
+## Configuración
 
-El `.env` local debe contener:
+El `.env` local ya debe tener las variables usadas por Expo:
 
 ```dotenv
 OPENAI_API_KEY=...
-AGENT_DEMO_TOKEN=un-token-local
+EXPO_PUBLIC_BASE_URL=https://...
+EXPO_PUBLIC_API_KEY=...
 ```
 
-Iniciar el servidor:
+Para un despliegue backend separado, usar las variantes server-only:
 
-```bash
-npm run agent:server
+```dotenv
+REPORT_API_BASE_URL=https://...
+REPORT_API_KEY=...
 ```
 
-En otra terminal, comprobar su salud:
+En un simulador iOS o en Expo Web, el servicio puede escuchar solamente en
+localhost:
 
-```bash
-curl http://127.0.0.1:8787/health
+```dotenv
+AGENT_SERVICE_HOST=127.0.0.1
 ```
 
-Enviar una pregunta:
+En un teléfono físico dentro de la misma red local:
 
-```bash
-curl \
-  -X POST \
-  http://127.0.0.1:8787/api/agent/chat \
-  -H "Authorization: Bearer un-token-local" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Compará Festival Horizonte con Noche Neón esta semana"}'
+```dotenv
+AGENT_SERVICE_HOST=0.0.0.0
+EXPO_PUBLIC_AGENT_API_URL=http://IP_DE_TU_COMPUTADORA:8787
 ```
 
-La respuesta contiene el texto y, por ahora, las herramientas utilizadas para
-que podamos inspeccionar el aprendizaje:
+No usar `0.0.0.0` como URL en la app. Es una dirección de escucha, no una
+dirección a la que el teléfono pueda conectarse.
 
-```json
-{
-  "answer": "Festival Horizonte lidera...",
-  "toolCalls": [
-    {
-      "toolName": "comparar_eventos",
-      "parameters": {
-        "eventoA": "Festival Horizonte",
-        "eventoB": "Noche Neón",
-        "periodo": "this_week"
-      }
-    }
-  ]
-}
-```
+## Probar desde Expo
 
-## Qué es demostrativo
+1. Iniciar el servicio:
 
-- `AGENT_DEMO_TOKEN` representa temporalmente la autenticación real.
-- `demoReportClient.mjs` representa temporalmente al backend de reportes.
-- `toolCalls` se devuelve para aprendizaje; en producción se registraría de
-  forma segura y normalmente no se enviaría a la app.
+   ```bash
+   npm run agent:server
+   ```
 
-## Próximo reemplazo
+2. Iniciar o recargar Expo después de cambiar variables `EXPO_PUBLIC_*`.
+3. Iniciar sesión con un usuario real.
+4. Abrir **Perfil -> Agente beta -> Probar agente**.
+5. Preguntar `¿Cuántos eventos tengo?` o buscar un evento por nombre.
 
-La siguiente iteración sustituirá `DemoReportClient` por un `ReportApiClient`
-que llame al backend real con la identidad autenticada. El servidor HTTP y el
-agente no deberían necesitar cambios estructurales.
+La respuesta incluye temporalmente `toolCalls` en el JSON para facilitar la
+inspección. La pantalla no muestra esos detalles.
+
+## Límites intencionales
+
+- Una sola herramienta: `buscar_eventos`.
+- Máximo 30 eventos por resultado enviado al modelo.
+- El modelo recibe nombre, fecha y estado; no recibe el token ni información de
+  compradores.
+- El catálogo se obtiene una vez por petición y se reutiliza entre validación y
+  tool call.
+- Un 401/403 upstream evita la llamada a OpenAI.
+
+## Próximo paso
+
+Después de verificar varios usuarios y cuentas, agregar una herramienta real de
+estadísticas con cálculos deterministas y pruebas de aislamiento equivalentes.
