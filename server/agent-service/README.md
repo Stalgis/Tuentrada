@@ -72,7 +72,8 @@ inspección. La pantalla no muestra esos detalles.
 
 ## Límites intencionales
 
-- Una sola herramienta: `buscar_eventos`.
+- Una sola herramienta: `buscar_eventos`, con búsqueda por nombre y filtros de fechas.
+- Los períodos relativos se calculan en hora de Argentina y el límite de 30 se aplica después de filtrar.
 - Máximo 30 eventos por resultado enviado al modelo.
 - El modelo recibe nombre, fecha y estado; no recibe el token ni información de
   compradores.

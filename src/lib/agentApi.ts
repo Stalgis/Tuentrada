@@ -1,6 +1,6 @@
-import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { env } from "./env";
+import { resolveAgentApiUrl } from "./agentApiUrl";
 
 export class AgentApiError extends Error {
   status: number;
@@ -17,20 +17,15 @@ type AgentResponse = {
   toolCalls?: { toolName: string; parameters: unknown }[];
 };
 
-const resolveAgentApiUrl = () => {
-  if (env.agentApiUrl) return env.agentApiUrl;
+const getAgentApiUrl = () => {
+  const url = resolveAgentApiUrl({
+    configuredUrl: env.agentApiUrl,
+    isDev: __DEV__,
+    platform: Platform.OS,
+  });
 
-  if (__DEV__) {
-    const expoHost = Constants.expoConfig?.hostUri?.split(":")[0];
-    if (expoHost) return `http://${expoHost}:8787`;
-    if (Platform.OS === "android") return "http://10.0.2.2:8787";
-    return "http://127.0.0.1:8787";
-  }
-
-  throw new AgentApiError(
-    0,
-    "El servicio del agente no está configurado para esta versión.",
-  );
+  if (url) return url;
+  throw new AgentApiError(0, "El servicio del agente no está configurado para esta versión.");
 };
 
 export const askAgent = async ({
@@ -42,7 +37,7 @@ export const askAgent = async ({
   message: string;
   signal?: AbortSignal;
 }): Promise<AgentResponse> => {
-  const response = await fetch(`${resolveAgentApiUrl()}/api/agent/chat`, {
+  const response = await fetch(`${getAgentApiUrl()}/api/agent/chat`, {
     method: "POST",
     headers: {
       Accept: "application/json",

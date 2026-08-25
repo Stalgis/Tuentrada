@@ -1,5 +1,7 @@
 import { Agent, run, tool } from "@openai/agents";
 import { z } from "zod";
+import { resolveEventDateRange } from "./eventDateRanges.mjs";
+import { searchEventCatalog } from "./eventSearch.mjs";
 
 const requireAppContext = (runContext) => {
   if (!runContext?.context) {
@@ -7,12 +9,6 @@ const requireAppContext = (runContext) => {
   }
   return runContext.context;
 };
-
-const normalize = (value) =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("es");
 
 const searchEventsTool = tool({
   name: "buscar_eventos",
@@ -25,21 +21,57 @@ const searchEventsTool = tool({
       .nullable()
       .describe("Texto opcional para filtrar por nombre; null para listar todos"),
     limite: z.number().int().min(1).max(30),
+    periodo: z
+      .enum([
+        "todos",
+        "hoy",
+        "manana",
+        "esta_semana",
+        "semana_pasada",
+        "proxima_semana",
+        "este_mes",
+        "personalizado",
+      ])
+      .nullable()
+      .describe("Período relativo solicitado; null o todos cuando no hay filtro temporal"),
+    fechaDesde: z
+      .string()
+      .nullable()
+      .describe("Inicio YYYY-MM-DD sólo cuando periodo es personalizado; null en otro caso"),
+    fechaHasta: z
+      .string()
+      .nullable()
+      .describe("Fin YYYY-MM-DD sólo cuando periodo es personalizado; null en otro caso"),
   }),
   errorFunction: null,
-  execute: async ({ consulta, limite }, runContext) => {
-    const { reports, audit } = requireAppContext(runContext);
-    audit("buscar_eventos", { consulta, limite });
+  execute: async (
+    { consulta, limite, periodo, fechaDesde, fechaHasta },
+    runContext,
+  ) => {
+    const { reports, audit, now } = requireAppContext(runContext);
+    const range = resolveEventDateRange({
+      periodo,
+      fechaDesde,
+      fechaHasta,
+      now,
+    });
+    audit("buscar_eventos", {
+      consulta,
+      limite,
+      periodo,
+      fechaDesde,
+      fechaHasta,
+      rangoResuelto: range,
+    });
     const events = await reports.listEvents();
-    const filtered = consulta
-      ? events.filter((event) => normalize(event.name).includes(normalize(consulta)))
-      : events;
+    const result = searchEventCatalog({ events, consulta, range, limite });
 
     return {
-      totalAccessible: events.length,
-      totalMatches: filtered.length,
-      truncated: filtered.length > limite,
-      events: filtered.slice(0, limite).map(({ name, dateISO, status }) => ({
+      totalAccessible: result.totalAccessible,
+      totalMatches: result.totalMatches,
+      truncated: result.truncated,
+      dateRange: range,
+      events: result.events.map(({ name, dateISO, status }) => ({
         name,
         dateISO,
         status,
@@ -58,6 +90,9 @@ Objetivo: ayudar al usuario a encontrar y contar sus eventos accesibles.
 
 Reglas:
 - Usá buscar_eventos antes de afirmar nombres, cantidades, estados o fechas.
+- Cuando pidan hoy, mañana, esta semana, la semana pasada, la próxima semana o este mes, pasá ese período a buscar_eventos. La herramienta calcula las fechas en hora de Argentina.
+- Para un rango con fechas explícitas usá periodo personalizado y completá fechaDesde y fechaHasta en formato YYYY-MM-DD.
+- Aplicá el filtro temporal en la herramienta; nunca deduzcas qué eventos pertenecen al período mirando una lista sin filtrar.
 - Sólo podés responder sobre el catálogo de eventos. Estadísticas, ventas, pagos, sectores y comparaciones todavía no están habilitados.
 - Si piden una capacidad no habilitada, explicalo brevemente y ofrecé listar o buscar eventos.
 - Nunca inventes eventos ni completes nombres o fechas ausentes.
@@ -73,6 +108,7 @@ export const answerWithAgent = async ({ message, user, reports, signal }) => {
     context: {
       user,
       reports,
+      now: new Date(),
       audit: (toolName, parameters) => toolCalls.push({ toolName, parameters }),
     },
     maxTurns: 4,

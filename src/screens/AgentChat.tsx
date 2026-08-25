@@ -45,6 +45,7 @@ const AgentChat = () => {
   const nextIdRef = useRef(2);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const canSend = Boolean(input.trim()) && !loading;
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
@@ -100,7 +101,7 @@ const AgentChat = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <AppHeader
           title="Agente beta"
@@ -219,20 +220,35 @@ const AgentChat = () => {
           />
           <Pressable
             onPress={() => send()}
-            disabled={loading || !input.trim()}
+            disabled={!canSend}
             accessibilityRole="button"
             accessibilityLabel="Enviar pregunta"
+            accessibilityState={{ disabled: !canSend }}
             style={({ pressed }) => ({
-              width: 46,
+              minWidth: 96,
               height: 46,
-              borderRadius: 23,
+              borderRadius: radius.pill,
+              flexDirection: "row",
+              gap: spacing.sm,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: palette.primary,
-              opacity: loading || !input.trim() ? 0.4 : pressed ? 0.75 : 1,
+              backgroundColor: canSend ? palette.primary : palette.surfaceMuted,
+              borderWidth: 1,
+              borderColor: canSend ? palette.primary : palette.border,
+              paddingHorizontal: spacing.base,
+              opacity: pressed ? 0.75 : 1,
             })}
           >
-            <Feather name="arrow-up" size={20} color="#ffffff" />
+            <Feather name="send" size={17} color={canSend ? "#ffffff" : palette.subtext} />
+            <Text
+              style={{
+                color: canSend ? "#ffffff" : palette.subtext,
+                fontSize: 14,
+                fontWeight: "800",
+              }}
+            >
+              Enviar
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
