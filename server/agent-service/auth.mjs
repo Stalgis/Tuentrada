@@ -22,17 +22,22 @@ const extractBearerToken = (request) => {
   return token;
 };
 
-const tokenFingerprint = (token) =>
+export const tokenFingerprint = (token) =>
   createHash("sha256").update(token).digest("hex").slice(0, 16);
 
 /**
  * La validación ocurre contra el backend real antes de invocar a OpenAI.
- * El token nunca entra al prompt, a los parámetros de tools ni a los logs.
+ * El token nunca entra al prompt, a los parámetros de tools ni a los logs:
+ * fuera de acá sólo circula el fingerprint.
+ *
+ * El fingerprint sale al llamador porque también es la clave de la caché de
+ * catálogo, del límite por sesión y del historial de conversación.
  */
 export const createUpstreamAuthenticator = ({ createReports }) =>
   async (request) => {
     const token = extractBearerToken(request);
-    const reports = createReports(token);
+    const fingerprint = tokenFingerprint(token);
+    const reports = createReports(token, fingerprint);
 
     try {
       await reports.validateAccess();
@@ -48,8 +53,9 @@ export const createUpstreamAuthenticator = ({ createReports }) =>
     }
 
     return {
-      user: { id: `session-${tokenFingerprint(token)}` },
+      user: { id: `session-${fingerprint}` },
       reports,
+      fingerprint,
     };
   };
 
@@ -57,5 +63,6 @@ export const createDemoAuthenticator = ({ expectedToken, reports }) =>
   async (request) => {
     const token = extractBearerToken(request);
     if (token !== expectedToken) throw new AuthenticationError();
-    return { user: { id: "demo-user" }, reports };
+    const fingerprint = tokenFingerprint(token);
+    return { user: { id: "demo-user" }, reports, fingerprint };
   };

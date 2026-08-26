@@ -46,3 +46,8 @@ app-example
 
 # AI tool configs (may contain API keys)
 .codex/config.toml
+
+# Notas de sesión de asistentes de IA. Son retrospectivas efímeras, no
+# documentación del proyecto: lo que valga la pena vive en
+# server/agent-service/README.md.
+memory/

@@ -113,32 +113,6 @@ const ProfileScreen = () => {
           </SurfaceCard>
 
           <SurfaceCard>
-            <Text style={{ ...typography.title, color: palette.text }}>Agente beta</Text>
-            <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
-              Probá preguntas sobre tu catálogo real de eventos. Ventas y recaudación todavía no están habilitadas.
-            </Text>
-            <Pressable
-              onPress={() => navigation.navigate("AgentChat")}
-              accessibilityRole="button"
-              style={({ pressed }) => ({
-                marginTop: spacing.base,
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: palette.surfaceMuted,
-                borderRadius: radius.lg,
-                paddingHorizontal: spacing.base,
-                paddingVertical: spacing.md + 2,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Feather name="message-circle" size={16} color={palette.primary} />
-              <Text style={{ marginLeft: spacing.sm, color: palette.primary, fontWeight: "700", fontSize: 14 }}>
-                Probar agente
-              </Text>
-            </Pressable>
-          </SurfaceCard>
-
-          <SurfaceCard>
             <Text style={{ ...typography.title, color: palette.text }}>Ayuda</Text>
             <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
               Accedé al panel de reportes o contactá a soporte técnico.

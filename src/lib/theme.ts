@@ -1,4 +1,8 @@
-import { DefaultTheme, DarkTheme, Theme as NavigationTheme } from "@react-navigation/native";
+import {
+  DarkTheme,
+  DefaultTheme,
+  Theme as NavigationTheme,
+} from "@react-navigation/native";
 
 export const lightPalette = {
   background: "#f7f9fb",
@@ -7,6 +11,9 @@ export const lightPalette = {
   surfaceEmphasis: "#e8f1ff",
   card: "#ffffff",
   primary: "#0058bc",
+  // Texto e iconos sobre `primary`. En claro el blanco da 6,73:1; en oscuro
+  // daba 3,16:1, por debajo del 4,5:1 que pide WCAG AA para texto normal.
+  onPrimary: "#ffffff",
   primarySoft: "#d8e2ff",
   secondary: "#405e96",
   text: "#191c1e",
@@ -26,6 +33,9 @@ export const darkPalette = {
   surfaceEmphasis: "#1a2a40",
   card: "#201f1f",
   primary: "#3e90ff",
+  // Azul claro sobre azul: el contraste se consigue oscureciendo el texto,
+  // no aclarándolo. 5,55:1 sobre#3e90ff.
+  onPrimary: "#0a1a2b",
   primarySoft: "#264778",
   secondary: "#aac7ff",
   text: "#e5e2e1",
@@ -44,10 +54,11 @@ export type ThemePreference = ThemeName | "system";
 
 export const lightTheme: AppTheme = lightPalette;
 export const darkTheme: AppTheme = darkPalette;
-export const getPalette = (theme: ThemeName): AppTheme => (theme === 'dark' ? darkPalette : lightPalette);
+export const getPalette = (theme: ThemeName): AppTheme =>
+  theme === "dark" ? darkPalette : lightPalette;
 
 export const getNavigationTheme = (theme: ThemeName): NavigationTheme =>
-  theme === 'dark'
+  theme === "dark"
     ? {
         ...DarkTheme,
         colors: {

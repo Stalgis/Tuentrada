@@ -45,6 +45,16 @@ export const setOnUnauthorized = (cb: ((gen: number) => void) | null): void => {
   onUnauthorizedCallback = cb;
 };
 
+/**
+ * Dispara el mismo teardown de sesión desde fuera de este módulo. El agente
+ * corre contra otro servicio, pero un 401 suyo significa exactamente lo mismo
+ * que un 401 de reportes: la sesión murió. Sin esto el usuario veía el error
+ * como una burbuja del chat y seguía navegando con una sesión muerta.
+ */
+export const notifyUnauthorized = (gen: number): void => {
+  onUnauthorizedCallback?.(gen);
+};
+
 // ─── Shared fetch helper ──────────────────────────────────────────────────────
 
 const BASE_URL = env.baseUrl;
