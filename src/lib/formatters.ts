@@ -53,3 +53,21 @@ export const formatDateLong = (value: string) =>
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
+
+// Importes abreviados para celdas muy chicas (calendario, rótulos de barras),
+// donde "$121.645.250" no entra. El salto a millones ocurre en 999.500 y no en
+// 1.000.000: por debajo de ese punto el redondeo a un decimal daría "$0,9M",
+// que dice menos que "$999k" y ocupa lo mismo.
+export const formatCompactARS = (value: number) => {
+  const abs = Math.abs(value);
+  if (abs >= 999_500) return `$${(value / 1_000_000).toFixed(1).replace(".", ",")}M`;
+  if (abs >= 950) return `$${Math.round(value / 1_000)}k`;
+  return `$${Math.round(value)}`;
+};
+
+export const formatCompactInteger = (value: number) => {
+  const abs = Math.abs(value);
+  if (abs >= 999_500) return `${(value / 1_000_000).toFixed(1).replace(".", ",")}M`;
+  if (abs >= 9_500) return `${Math.round(value / 1_000)}k`;
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(value);
+};

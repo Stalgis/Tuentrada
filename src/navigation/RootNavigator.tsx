@@ -9,6 +9,7 @@ import DashboardScreen from "../screens/DashboardScreen";
 import EventsListScreen from "../screens/EventsListScreen";
 import EventDetailScreen from "../screens/EventDetailScreen";
 import FunctionDetailScreen from "../screens/FunctionDetailScreen";
+import SalesHistoryScreen from "../screens/SalesHistoryScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
@@ -124,6 +125,7 @@ const AppNavigator = () => (
     <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
     <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
     <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
+    <AppStack.Screen name="SalesHistory" component={SalesHistoryScreen} />
   </AppStack.Navigator>
 );
 

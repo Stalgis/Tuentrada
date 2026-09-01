@@ -136,6 +136,38 @@ const EventDetailScreen = () => {
                 </SurfaceCard>
               </View>
 
+              {/* Entrada al histórico diario. Sin `functionId` arranca con
+                  todas las funciones del evento y se acota desde sus filtros. */}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => navigation.navigate("SalesHistory", { eventId: event.id })}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  paddingHorizontal: 18,
+                  paddingVertical: 16,
+                  borderRadius: 28,
+                  borderWidth: 1,
+                  borderColor: palette.hairline,
+                  backgroundColor: palette.surface,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                  <Feather name="trending-up" size={18} color={palette.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "800" }}>
+                      Histórico por día
+                    </Text>
+                    <Text style={{ color: palette.subtext, fontSize: 12, marginTop: 2 }}>
+                      Curva de venta, calendario y detalle diario
+                    </Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={18} color={palette.subtext} />
+              </Pressable>
+
               <Text style={{ color: palette.text, fontSize: 18, fontWeight: "800", marginTop: 4, paddingHorizontal: 2 }}>
                 Funciones
               </Text>
