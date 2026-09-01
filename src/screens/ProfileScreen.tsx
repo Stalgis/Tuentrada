@@ -11,6 +11,7 @@ import Chip from "../components/stitch/Chip";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { useTranslation } from "../hooks/useTranslation";
+import { useAppVersion } from "../hooks/useAppVersion";
 import { getPalette } from "../lib/theme";
 import { radius, spacing, typography } from "../lib/design";
 
@@ -29,6 +30,7 @@ const ProfileScreen = () => {
   const { themePreference, setTheme, theme } = useAppState();
   const { t } = useTranslation();
   const palette = getPalette(theme);
+  const appVersion = useAppVersion();
 
   const openPanel = async () => {
     try {
@@ -171,6 +173,18 @@ const ProfileScreen = () => {
           >
             <Text style={{ color: "#ffffff", fontWeight: "800", fontSize: 15 }}>{t("signOut")}</Text>
           </Pressable>
+
+          <Text
+            accessibilityRole="text"
+            style={{
+              ...typography.caption,
+              color: palette.subtext,
+              textAlign: "center",
+              marginTop: spacing.sm,
+            }}
+          >
+            {`${t("appVersionLabel")} ${appVersion}`}
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

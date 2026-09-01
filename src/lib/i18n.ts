@@ -17,6 +17,7 @@ export const translations = {
     signOutConfirmTitle: "Sign out",
     signOutConfirmMessage: "Are you sure you want to sign out?",
     signOutConfirmCancel: "Cancel",
+    appVersionLabel: "Version",
   },
   es: {
     loginTitle: "Bienvenido de nuevo",
@@ -34,6 +35,7 @@ export const translations = {
     signOutConfirmTitle: "Cerrar sesión",
     signOutConfirmMessage: "¿Estás seguro que querés cerrar sesión?",
     signOutConfirmCancel: "Cancelar",
+    appVersionLabel: "Versión",
   },
 } as const;
 
