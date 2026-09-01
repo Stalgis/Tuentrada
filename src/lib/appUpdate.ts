@@ -30,6 +30,11 @@ export type UpdateFlags = {
   isUpdatePending: boolean;
   checkError?: Error | null;
   downloadError?: Error | null;
+  /**
+   * Un fallo de `reloadAsync`. Va aparte de `downloadError` porque significa
+   * otra cosa: la actualización está descargada y lo que falló fue aplicarla.
+   */
+  restartError?: Error | null;
   /** Si ya hubo al menos una comprobación desde que arrancó la app. */
   hasChecked: boolean;
 };
@@ -44,8 +49,13 @@ export const getUpdateStatus = (flags: UpdateFlags): UpdateStatus => {
   if (flags.isChecking) return "checking";
 
   // Una descarga terminada gana sobre cualquier error viejo: la actualización
-  // ya está en el dispositivo y lo único que falta es reiniciar.
+  // ya está en el dispositivo y lo único que falta es reiniciar. Incluso si el
+  // reinicio falló, el estado sigue siendo "lista": esconder el botón dejaría
+  // al usuario con la actualización bajada y sin forma de aplicarla. Que el
+  // reinicio falló se lo cuenta la UI, que muestra el mensaje en este estado.
   if (flags.isUpdatePending) return "ready";
+
+  if (flags.restartError) return "error";
 
   if (flags.downloadError) return "error";
   if (flags.isUpdateAvailable) return "available";

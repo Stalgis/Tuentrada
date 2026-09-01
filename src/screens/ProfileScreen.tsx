@@ -210,7 +210,10 @@ const ProfileScreen = () => {
                 </Text>
               </View>
 
-              {update.status === "error" && update.error ? (
+              {/* También en "ready": si falló el reinicio, la actualización
+                  sigue lista y el botón sigue siendo reintentar, pero hay que
+                  decir por qué no se aplicó. */}
+              {(update.status === "error" || update.status === "ready") && update.error ? (
                 <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
                   {update.error.message}
                 </Text>

@@ -29,8 +29,11 @@ export const useAppUpdate = (): AppUpdate => {
     lastCheckForUpdateTimeSinceRestart,
   } = Updates.useUpdates();
 
-  // `reloadAsync` no reporta por `useUpdates`, así que sus fallos se guardan acá.
-  const [actionError, setActionError] = useState<Error | null>(null);
+  // `reloadAsync` no reporta por `useUpdates`, así que sus fallos se guardan
+  // acá. Van en su propia ranura y no mezclados con `downloadError`: significan
+  // otra cosa —la actualización está bajada y lo que falló fue aplicarla— y
+  // confundirlos deja el mensaje sin mostrar.
+  const [restartError, setRestartError] = useState<Error | null>(null);
 
   const status = getUpdateStatus({
     // En web el módulo trae un stub con `isEnabled` en true que no actualiza
@@ -42,12 +45,13 @@ export const useAppUpdate = (): AppUpdate => {
     isUpdateAvailable,
     isUpdatePending,
     checkError,
-    downloadError: downloadError ?? actionError,
+    downloadError,
+    restartError,
     hasChecked: lastCheckForUpdateTimeSinceRestart != null,
   });
 
   const run = useCallback(async () => {
-    setActionError(null);
+    setRestartError(null);
     try {
       switch (nextUpdateAction(status)) {
         case "check":
@@ -63,7 +67,7 @@ export const useAppUpdate = (): AppUpdate => {
           break;
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error : new Error(String(error)));
+      setRestartError(error instanceof Error ? error : new Error(String(error)));
     }
   }, [status]);
 
@@ -82,7 +86,7 @@ export const useAppUpdate = (): AppUpdate => {
 
   return {
     status,
-    error: actionError ?? downloadError ?? checkError ?? null,
+    error: restartError ?? downloadError ?? checkError ?? null,
     progress: typeof downloadProgress === "number" ? downloadProgress : null,
     run,
   };

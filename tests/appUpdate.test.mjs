@@ -15,6 +15,7 @@ const flags = (overrides = {}) => ({
   isUpdatePending: false,
   checkError: null,
   downloadError: null,
+  restartError: null,
   hasChecked: false,
   ...overrides,
 });
@@ -89,6 +90,23 @@ test("un error de comprobación no tapa una actualización ya encontrada", () =>
 
 test("error de comprobación sin nada encontrado", () => {
   const status = getUpdateStatus(flags({ checkError: new Error("red"), hasChecked: true }));
+  assert.equal(status, "error");
+  assert.equal(nextUpdateAction(status), "check");
+});
+
+test("si falla el reinicio, la actualización sigue lista para aplicar", () => {
+  // Esconder el botón acá dejaría al usuario con la actualización descargada y
+  // sin forma de aplicarla. Que el reinicio falló se lo cuenta la UI, que
+  // muestra el mensaje en este estado.
+  const status = getUpdateStatus(
+    flags({ isUpdatePending: true, restartError: new Error("no se pudo reiniciar") }),
+  );
+  assert.equal(status, "ready");
+  assert.equal(nextUpdateAction(status), "restart");
+});
+
+test("un fallo de reinicio sin actualización pendiente sí es error", () => {
+  const status = getUpdateStatus(flags({ restartError: new Error("boom"), hasChecked: true }));
   assert.equal(status, "error");
   assert.equal(nextUpdateAction(status), "check");
 });

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 import { Image } from "expo-image";
+import Constants from "expo-constants";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -18,6 +19,7 @@ import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
 import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
 import { getNavigationTheme } from "../lib/theme";
+import { readSplashConfig } from "../lib/splashConfig";
 import {
   EventsStackParamList,
   RootTabParamList,
@@ -28,10 +30,10 @@ import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
 import { useSessionScreenProtection } from "../hooks/useSessionScreenProtection";
 
-// Deben coincidir con el bloque expo-splash-screen de app.json: si divergen,
-// el traspaso del splash nativo a este vuelve a verse como un salto.
-const SPLASH_BACKGROUND = "#021f79";
-const SPLASH_IMAGE_WIDTH = 220;
+// Sale del mismo bloque de app.json que configura el splash nativo, en vez de
+// estar copiado acá: si divergen, el traspaso del splash nativo a este vuelve
+// a verse como un salto, y nada lo delataría.
+const SPLASH = readSplashConfig(Constants.expoConfig?.plugins);
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -187,11 +189,11 @@ const RootNavigator = () => {
   // se vea: sin esto la pantalla saltaba del azul al blanco por un instante.
   // El indicador va absoluto para no correr el logo de su centro.
   const renderSplash = () => (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: SPLASH_BACKGROUND }}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: SPLASH.backgroundColor }}>
       <Image
         source={require("../../assets/images/splash-icon.png")}
         contentFit="contain"
-        style={{ width: SPLASH_IMAGE_WIDTH, height: SPLASH_IMAGE_WIDTH * (298 / 745) }}
+        style={{ width: SPLASH.imageWidth, height: SPLASH.imageWidth * (298 / 745) }}
       />
       <ActivityIndicator
         size="large"

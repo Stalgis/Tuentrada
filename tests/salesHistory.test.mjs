@@ -6,6 +6,7 @@ import {
   buildDailySeries,
   cumulative,
   cumulativeCeiling,
+  dayTicketPrice,
   keyDaysBefore,
   parseHistoryDate,
   barScaleCutoff,
@@ -237,4 +238,15 @@ test("el recorte por rango usa claves comparables como texto", () => {
   assert.equal(keyDaysBefore(series, 2), "2026-04-02");
   const cut = sliceSeries(series, "2026-04-02");
   assert.deepEqual(cut.map((d) => d.key), ["2026-04-02", "2026-04-03"]);
+});
+
+test("el precio por entrada no divide por cero", () => {
+  // Día con invitaciones y ninguna venta: net / sold daría NaN y la pantalla
+  // terminaba mostrando "$NaN".
+  assert.equal(dayTicketPrice({ net: 0, sold: 0 }), null);
+  // Y si el backend llegara a atribuir recaudación a un día sin ventas,
+  // tampoco puede salir Infinity.
+  assert.equal(dayTicketPrice({ net: 500000, sold: 0 }), null);
+
+  assert.equal(dayTicketPrice({ net: 1290000, sold: 18 }), 1290000 / 18);
 });

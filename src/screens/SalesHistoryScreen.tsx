@@ -19,6 +19,7 @@ import {
   keyDaysBefore,
   quantileCuts,
   sliceSeries,
+  dayTicketPrice,
   summarizeHistory,
   topDays,
   type DailySale,
@@ -87,8 +88,28 @@ const SalesHistoryScreen = () => {
 
   const idsKey = selectedFunctionIds.join(",");
 
+  const catalogSettled = events.status === "success" || events.status === "error";
+  // El evento existe en el catálogo pero no tiene funciones, o el id no está.
+  // En cualquiera de los dos casos no hay nada que consultar.
+  const noFunctions = catalogSettled && functions.length === 0;
+
   useEffect(() => {
-    if (!accessToken || selectedFunctionIds.length === 0) return;
+    if (!accessToken) return;
+
+    if (selectedFunctionIds.length === 0) {
+      // La condición mira `noFunctions` y no sólo la selección vacía: en el
+      // primer render la selección todavía está vacía aunque el evento sí
+      // tenga funciones —el efecto que la autocompleta corre en la misma
+      // pasada, con el valor viejo—, y salir acá mostraría el vacío por un
+      // frame antes de cargar. Mientras el catálogo esté en vuelo el indicador
+      // también es lo correcto: las funciones todavía pueden llegar.
+      if (noFunctions) {
+        setRows([]);
+        setError(events.status === "error" ? "No pudimos cargar el catálogo de eventos." : null);
+        setLoading(false);
+      }
+      return;
+    }
 
     // Una respuesta que llega después de cambiar de filtro (o de desmontar) no
     // debe pisar el estado de la consulta vigente.
@@ -113,7 +134,7 @@ const SalesHistoryScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, idsKey, reloadToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accessToken, idsKey, reloadToken, noFunctions, events.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // El aforo sólo tiene sentido con una función a la vez: sumarlo entre varias
   // mezclaría salas distintas. Es una petición aparte porque el histórico no lo
@@ -161,6 +182,13 @@ const SalesHistoryScreen = () => {
     return found >= 0 ? found : Math.max(0, visible.length - 1);
   }, [visible, selectedKey]);
   const selectedDay = visible[selectedIndex] ?? null;
+
+  const retry = useCallback(() => {
+    // Si lo que falló fue el catálogo, repetir la consulta del histórico no
+    // arregla nada: hay que volver a pedir los eventos.
+    if (accessToken && events.status === "error") loadEvents(accessToken);
+    setReloadToken((value) => value + 1);
+  }, [accessToken, events.status, loadEvents]);
 
   const selectByIndex = useCallback(
     (index: number) => {
@@ -271,6 +299,8 @@ const SalesHistoryScreen = () => {
     </View>
   );
 
+  const ticketPrice = selectedDay ? dayTicketPrice(selectedDay) : null;
+
   const dayCard = selectedDay ? (
     <SurfaceCard tone="hero" style={{ marginTop: spacing.md }}>
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -323,15 +353,19 @@ const SalesHistoryScreen = () => {
             ))}
           </View>
           {/* `total_net` sólo cuenta lo vendido: dividirlo por las entradas
-              emitidas da un precio promedio que nunca existió. */}
+              emitidas da un precio promedio que nunca existió. Y un día de
+              sólo invitaciones no tiene promedio: `dayTicketPrice` devuelve
+              null en vez de dividir por cero. */}
           <Text style={{ fontSize: 11.5, color: palette.subtext, marginTop: 11 }}>
-            {selectedDay.guests > 0
-              ? `${formatInteger(selectedDay.guests)} invitaciones no facturan: el promedio real es ${formatCurrencyARS(
-                  selectedDay.net / selectedDay.sold,
-                )} por entrada vendida.`
-              : selectedDay.sold > 0
-                ? `${formatCurrencyARS(selectedDay.net / selectedDay.sold)} promedio por entrada.`
-                : "Sin ventas registradas este día."}
+            {ticketPrice == null
+              ? selectedDay.guests > 0
+                ? `${formatInteger(selectedDay.guests)} invitaciones y ninguna venta: este día no tiene promedio por entrada.`
+                : "Sin ventas registradas este día."
+              : selectedDay.guests > 0
+                ? `${formatInteger(selectedDay.guests)} invitaciones no facturan: el promedio real es ${formatCurrencyARS(
+                    ticketPrice,
+                  )} por entrada vendida.`
+                : `${formatCurrencyARS(ticketPrice)} promedio por entrada.`}
           </Text>
         </>
       ) : (
@@ -569,7 +603,7 @@ const SalesHistoryScreen = () => {
             <Text style={{ fontSize: 12.5, color: palette.subtext, marginTop: 4 }}>{error}</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setReloadToken((value) => value + 1)}
+              onPress={retry}
               style={{
                 marginTop: 12,
                 alignSelf: "flex-start",
@@ -581,6 +615,15 @@ const SalesHistoryScreen = () => {
             >
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>Reintentar</Text>
             </Pressable>
+          </SurfaceCard>
+        ) : noFunctions ? (
+          <SurfaceCard>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: palette.text }}>
+              Este evento no tiene funciones
+            </Text>
+            <Text style={{ fontSize: 12.5, color: palette.subtext, marginTop: 4 }}>
+              Sin funciones no hay histórico que consultar.
+            </Text>
           </SurfaceCard>
         ) : visible.length === 0 ? (
           <SurfaceCard>

@@ -266,6 +266,17 @@ export const cumulativeCeiling = (
   };
 };
 
+/**
+ * Recaudación por entrada vendida de un día, o `null` cuando no hubo ventas.
+ *
+ * Divide por `sold` y nunca por `total`: las invitaciones no facturan. Y
+ * devuelve `null` en vez de dividir por cero, que es el caso real de un día
+ * con invitaciones y ninguna venta —ahí `net / sold` da NaN y la pantalla
+ * termina mostrando "$NaN".
+ */
+export const dayTicketPrice = (day: Pick<DailySale, "net" | "sold">): number | null =>
+  day.sold > 0 ? day.net / day.sold : null;
+
 /** Los N días de mayor recaudación, de mayor a menor. */
 export const topDays = (series: readonly DailySale[], count: number): DailySale[] =>
   series
