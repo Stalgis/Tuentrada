@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { Alert, Platform } from "react-native";
-import Constants from "expo-constants";
+import { IS_EXPO_GO } from "../lib/expoRuntime";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import type { PropsWithChildren } from "react";
@@ -84,7 +84,6 @@ const AUTH_BYPASS_CONTEXT: AuthContextValue = {
 
 const BIOMETRIC_FLAG_KEY = "tuentrada_biometric_enabled";
 const BIOMETRIC_CREDENTIALS_KEY = "tuentrada_biometric_credentials";
-const IS_EXPO_GO = Constants.appOwnership === "expo";
 
 const BIOMETRIC_PROMPT_MESSAGES = {
   promptMessage: Platform.OS === "ios" ? "Confirmá con Face ID" : "Confirmá con biometría",

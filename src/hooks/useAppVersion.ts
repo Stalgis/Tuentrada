@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { formatAppVersion } from "../lib/appVersion";
+import { IS_EXPO_GO } from "../lib/expoRuntime";
 
 /**
  * Versión que corre en el dispositivo, lista para mostrar.
@@ -21,6 +22,6 @@ export const useAppVersion = (): string =>
     return formatAppVersion({
       version: Constants.expoConfig?.version,
       buildNumber,
-      isExpoGo: Constants.appOwnership === "expo",
+      isExpoGo: IS_EXPO_GO,
     });
   }, []);
