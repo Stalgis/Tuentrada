@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -12,6 +12,7 @@ import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
 import { useTranslation } from "../hooks/useTranslation";
 import { useAppVersion } from "../hooks/useAppVersion";
+import { useAppUpdate } from "../hooks/useAppUpdate";
 import { getPalette } from "../lib/theme";
 import { radius, spacing, typography } from "../lib/design";
 
@@ -31,6 +32,7 @@ const ProfileScreen = () => {
   const { t } = useTranslation();
   const palette = getPalette(theme);
   const appVersion = useAppVersion();
+  const update = useAppUpdate();
 
   const openPanel = async () => {
     try {
@@ -58,6 +60,37 @@ const ProfileScreen = () => {
       ],
     );
   };
+
+  // Estados en los que la tarjeta tiene algo que decir. `checking` y
+  // `upToDate` se resuelven con la línea del pie.
+  const updateCardBody =
+    update.status === "available"
+      ? t("updateAvailable")
+      : update.status === "downloading"
+        ? t("updateDownloading")
+        : update.status === "ready"
+          ? t("updateReady")
+          : update.status === "restarting"
+            ? t("updateRestarting")
+            : update.status === "error"
+              ? t("updateErrorTitle")
+              : null;
+
+  const updateActionLabel =
+    update.status === "available"
+      ? t("updateDownload")
+      : update.status === "ready"
+        ? t("updateRestart")
+        : update.status === "error"
+          ? t("updateRetry")
+          : null;
+
+  const updateFooterNote =
+    update.status === "checking"
+      ? t("updateChecking")
+      : update.status === "upToDate"
+        ? t("updateUpToDate")
+        : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
@@ -161,6 +194,57 @@ const ProfileScreen = () => {
             </View>
           </SurfaceCard>
 
+          {/* La tarjeta aparece sólo cuando hay algo que hacer. Cuando la app
+              está al día basta la línea del pie: una tarjeta permanente que
+              casi siempre dice "todo bien" es ruido. */}
+          {updateCardBody ? (
+            <SurfaceCard tone={update.status === "error" ? "base" : "hero"}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm + 2 }}>
+                <Feather
+                  name={update.status === "error" ? "alert-circle" : "download"}
+                  size={18}
+                  color={update.status === "error" ? palette.danger : palette.primary}
+                />
+                <Text style={{ ...typography.label, color: palette.text, flex: 1 }}>
+                  {updateCardBody}
+                </Text>
+              </View>
+
+              {update.status === "error" && update.error ? (
+                <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
+                  {update.error.message}
+                </Text>
+              ) : null}
+
+              {update.status === "downloading" && update.progress != null ? (
+                <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
+                  {`${Math.round(update.progress * 100)}%`}
+                </Text>
+              ) : null}
+
+              {updateActionLabel ? (
+                <Pressable
+                  onPress={update.run}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    marginTop: spacing.base,
+                    backgroundColor: palette.primary,
+                    borderRadius: radius.lg,
+                    paddingVertical: spacing.md + 2,
+                    alignItems: "center",
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 14 }}>
+                    {updateActionLabel}
+                  </Text>
+                </Pressable>
+              ) : (
+                <ActivityIndicator color={palette.primary} style={{ marginTop: spacing.base }} />
+              )}
+            </SurfaceCard>
+          ) : null}
+
           <Pressable
             onPress={handleSignOut}
             style={{
@@ -185,6 +269,19 @@ const ProfileScreen = () => {
           >
             {`${t("appVersionLabel")} ${appVersion}`}
           </Text>
+
+          {updateFooterNote ? (
+            <Text
+              style={{
+                ...typography.caption,
+                color: palette.subtext,
+                textAlign: "center",
+                marginTop: spacing.xs,
+              }}
+            >
+              {updateFooterNote}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
