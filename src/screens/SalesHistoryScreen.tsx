@@ -443,10 +443,10 @@ const SalesHistoryScreen = () => {
           valueOf={(day) => (unit === "money" ? day.net : day.total)}
           selectedIndex={selectedIndex}
           onSelect={selectByIndex}
-          formatValue={formatUnit}
         />
         <Text style={{ fontSize: 11.5, color: palette.subtext, marginTop: 6 }}>
-          Escala cortada en el percentil 95; las barras que la superan van marcadas y rotuladas.
+          Escala cortada en el percentil 95: las barras que la superan llevan una marca de corte. Tocá una para ver el
+          valor del día.
         </Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 5 }}>
           {visible.length > 0 ? (

@@ -158,28 +158,30 @@ export const DailyBars = ({
   valueOf,
   selectedIndex,
   onSelect,
-  formatValue,
 }: {
   series: DailySale[];
   valueOf: (day: DailySale) => number;
   selectedIndex: number;
   onSelect: (index: number) => void;
-  formatValue: (value: number) => string;
 }) => {
   const { theme } = useAppState();
   const palette = getPalette(theme);
-  const height = 92;
-  const top = 18;
-  const bottom = 84;
+  const height = 82;
+  const top = 10;
+  const bottom = 78;
 
   if (series.length === 0) return null;
 
   // El día de salida a la venta multiplica por cien a un día normal. Con escala
   // completa el resto de las barras queda en un pixel —el mismo problema que
   // hace ilegible un calendario lineal—, así que se corta la escala y las
-  // barras que la superan se marcan y se rotulan con su valor real.
+  // barras que la superan llevan una marca de corte.
+  //
+  // Las marcas no van rotuladas con el valor: en un rango largo los picos caen
+  // juntos y sus rótulos se apilan hasta volverse ilegibles. El valor exacto
+  // sale tocando la barra, que es de donde se lee cualquier otro día.
   const cutoff = Math.max(1, barScaleCutoff(series.filter((d) => d.hasData).map(valueOf), 0.95));
-  const width = Math.max(3, VIEW_W / series.length - 2.4);
+  const width = Math.max(1.5, VIEW_W / series.length - 2.4);
   const x = (index: number) => ((index + 0.5) / series.length) * VIEW_W;
 
   return (
@@ -238,9 +240,6 @@ export const DailyBars = ({
                     strokeWidth={2.6}
                     strokeLinecap="round"
                   />
-                  <SvgText x={Math.max(0, left - 2)} y={top - 6} fontSize={9.5} fontWeight="700" fill={palette.text}>
-                    {formatValue(value)}
-                  </SvgText>
                 </>
               ) : null}
             </React.Fragment>
