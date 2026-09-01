@@ -532,7 +532,8 @@ const SalesHistoryScreen = () => {
         <View style={{ backgroundColor: palette.muted, borderRadius: radius.sm, padding: 11, marginTop: 12 }}>
           <Text style={{ fontSize: 11, color: palette.subtext, lineHeight: 16 }}>
             Un solo tono, no semáforo: la intensidad dice más o menos que los demás días, no «bien o mal». Los cortes se
-            recalculan con cada filtro. Las fechas con «–» son las que el backend no devuelve.
+            recalculan con cada filtro y valen para todos los meses, así que los meses se pueden comparar entre sí. Las
+            fechas con «–» son las que el backend no devuelve; las grises, las que quedan fuera del rango filtrado.
           </Text>
         </View>
       </SurfaceCard>
