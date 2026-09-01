@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
+import { Image } from "expo-image";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -26,6 +27,11 @@ import {
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
 import { useSessionScreenProtection } from "../hooks/useSessionScreenProtection";
+
+// Deben coincidir con el bloque expo-splash-screen de app.json: si divergen,
+// el traspaso del splash nativo a este vuelve a verse como un salto.
+const SPLASH_BACKGROUND = "#021f79";
+const SPLASH_IMAGE_WIDTH = 220;
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -176,9 +182,22 @@ const RootNavigator = () => {
 
   const renderAuth = () => <AuthNavigator />;
 
+  // Continuación del splash nativo mientras se verifica la sesión. Repite su
+  // fondo, y su logo al mismo ancho y centrado igual, para que el traspaso no
+  // se vea: sin esto la pantalla saltaba del azul al blanco por un instante.
+  // El indicador va absoluto para no correr el logo de su centro.
   const renderSplash = () => (
-    <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-      <ActivityIndicator size="large" color="#0058bc" />
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: SPLASH_BACKGROUND }}>
+      <Image
+        source={require("../../assets/images/splash-icon.png")}
+        contentFit="contain"
+        style={{ width: SPLASH_IMAGE_WIDTH, height: SPLASH_IMAGE_WIDTH * (298 / 745) }}
+      />
+      <ActivityIndicator
+        size="large"
+        color="#ffffff"
+        style={{ position: "absolute", bottom: "22%" }}
+      />
     </View>
   );
 
