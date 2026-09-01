@@ -242,6 +242,30 @@ export const summarizeHistory = (series: readonly DailySale[]): HistorySummary =
   };
 };
 
+/**
+ * Techo del eje Y de la curva acumulada, y si corresponde dibujar la línea de
+ * aforo.
+ *
+ * El aforo sólo entra en la escala cuando la venta ya llegó a una fracción
+ * razonable de él. Con 72 localidades vendidas sobre 3.282, un techo en el
+ * aforo aplasta la curva contra el eje: el gráfico queda en una línea recta y
+ * deja de mostrar lo único que aporta, la forma de la venta. El porcentaje de
+ * aforo ya está escrito en la tarjeta de arriba, así que no se pierde el dato.
+ */
+export const MIN_CAPACITY_SHARE = 0.25;
+
+export const cumulativeCeiling = (
+  lastValue: number,
+  capacity?: number,
+): { ceiling: number; showCapacity: boolean } => {
+  const showCapacity =
+    capacity != null && capacity > 0 && lastValue >= capacity * MIN_CAPACITY_SHARE;
+  return {
+    ceiling: Math.max(showCapacity ? (capacity as number) : 0, lastValue, 1),
+    showCapacity,
+  };
+};
+
 /** Los N días de mayor recaudación, de mayor a menor. */
 export const topDays = (series: readonly DailySale[], count: number): DailySale[] =>
   series

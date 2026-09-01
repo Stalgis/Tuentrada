@@ -12,7 +12,7 @@ import Svg, {
 } from "react-native-svg";
 import { useAppState } from "../../store/appState";
 import { getPalette } from "../../lib/theme";
-import { barScaleCutoff, type DailySale } from "../../lib/salesHistory";
+import { barScaleCutoff, cumulativeCeiling, type DailySale } from "../../lib/salesHistory";
 
 type ScrubProps = {
   count: number;
@@ -86,7 +86,7 @@ export const CumulativeChart = ({
   if (values.length === 0) return null;
 
   const last = values[values.length - 1];
-  const ceiling = Math.max(capacity ?? 0, last, 1);
+  const { ceiling, showCapacity } = cumulativeCeiling(last, capacity);
   const y = (value: number) => bottom - (value / ceiling) * (bottom - top);
   const x = (index: number) => ((index + 0.5) / values.length) * VIEW_W;
 
@@ -101,7 +101,7 @@ export const CumulativeChart = ({
 
   const sx = x(selectedIndex);
   const sy = y(values[selectedIndex]);
-  const capY = capacity ? y(capacity) : null;
+  const capY = showCapacity ? y(capacity as number) : null;
 
   return (
     <Scrubbable count={values.length} onSelect={onSelect}>

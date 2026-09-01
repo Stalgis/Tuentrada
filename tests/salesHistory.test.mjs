@@ -5,6 +5,7 @@ import {
   bucketFor,
   buildDailySeries,
   cumulative,
+  cumulativeCeiling,
   keyDaysBefore,
   parseHistoryDate,
   barScaleCutoff,
@@ -118,6 +119,31 @@ test("el acumulado corre sobre entradas y recaudación", () => {
   const { tickets, net } = cumulative(series);
   assert.deepEqual(tickets, [511, 518]);
   assert.deepEqual(net, [40505000, 41030000]);
+});
+
+test("el aforo no entra en la escala cuando aplastaría la curva", () => {
+  // Caso real de Salsa Paloosa: 72 localidades vendidas sobre un aforo de
+  // 3.282. Con techo en el aforo la curva ocupa el 2 % de la altura y se ve
+  // como una línea recta.
+  const bajo = cumulativeCeiling(72, 3282);
+  assert.equal(bajo.showCapacity, false);
+  assert.equal(bajo.ceiling, 72, "la escala se ajusta al dato");
+
+  // Con la venta avanzada el aforo sí es una referencia útil y la curva sigue
+  // usando la mayor parte de la altura.
+  const alto = cumulativeCeiling(2400, 3000);
+  assert.equal(alto.showCapacity, true);
+  assert.equal(alto.ceiling, 3000);
+
+  // Sin aforo (modo $, o función sin sectores) manda el dato.
+  assert.deepEqual(cumulativeCeiling(8110000, undefined), {
+    ceiling: 8110000,
+    showCapacity: false,
+  });
+
+  // Una serie en cero no puede producir una división por cero.
+  assert.equal(cumulativeCeiling(0, undefined).ceiling, 1);
+  assert.equal(cumulativeCeiling(0, 0).showCapacity, false);
 });
 
 test("los cuantiles reparten el rango aunque haya un outlier", () => {
