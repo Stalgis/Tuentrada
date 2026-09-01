@@ -1,181 +1,138 @@
-import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Animated, {
   interpolate,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withSpring,
+  withTiming,
+  Easing,
 } from "react-native-reanimated";
 import { radius, shadow } from "../../lib/design";
 import { getPalette } from "../../lib/theme";
 import { useAppState } from "../../store/appState";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const ACTION_OFFSET = 68;
+const SIZE = 56;
+const ICON_MS = 200;
 
 type AgentFloatingButtonProps = {
+  open: boolean;
+  onToggle: () => void;
   bottom: number;
-  onOpenAgent: () => void;
 };
 
-const AgentFloatingButton = ({ bottom, onOpenAgent }: AgentFloatingButtonProps) => {
+/**
+ * Un único botón que abre y cierra el agente.
+ *
+ * No se mueve: sólo cambia el ícono. Moverlo a la esquina de arriba se probó y
+ * el desplazamiento se leía brusco; además el choque que se temía con el botón
+ * de enviar del composer no existe, porque el flotante queda unos 30pt por
+ * encima. Quieto es más tranquilo y no pierde nada.
+ */
+const AgentFloatingButton = ({ open, onToggle, bottom }: AgentFloatingButtonProps) => {
   const { theme } = useAppState();
   const palette = getPalette(theme);
   const reduceMotion = useReducedMotion();
-  const progress = useSharedValue(0);
-  // El feedback de presionado va por Reanimated, no por el `style` como
-  // función de Pressable: ver el comentario en `mainStyle`.
+
+  const progress = useSharedValue(open ? 1 : 0);
   const pressed = useSharedValue(0);
-  const [expanded, setExpanded] = useState(false);
 
-  const animateTo = (next: boolean) => {
-    setExpanded(next);
+  useEffect(() => {
+    const destino = open ? 1 : 0;
     progress.value = reduceMotion
-      ? Number(next)
-      : withSpring(Number(next), {
-          duration: 280,
-          dampingRatio: 0.82,
-          overshootClamping: true,
-        });
-  };
-
-  const toggle = () => animateTo(!expanded);
-
-  const openAgent = () => {
-    animateTo(false);
-    onOpenAgent();
-  };
-
-  const actionStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [
-      { translateY: -ACTION_OFFSET * progress.value },
-      { scale: interpolate(progress.value, [0, 1], [0.82, 1]) },
-    ],
-  }));
+      ? destino
+      : withTiming(destino, { duration: ICON_MS, easing: Easing.out(Easing.quad) });
+  }, [open, progress, reduceMotion]);
 
   /**
-   * Escala y opacidad al presionar.
-   *
-   * Antes esto se resolvía con `style={({ pressed }) => [...]}`, que es la
-   * forma nativa de Pressable pero NO sobrevive a
-   * `Animated.createAnimatedComponent`: Reanimated pasa el style por
-   * `flattenArray`, que convierte la función en `[fn]`. Pressable sólo llama a
-   * la función cuando el style ES una función, no cuando es un array que la
-   * contiene, así que la función nunca se ejecutaba y el botón se quedaba sin
-   * ancho, sin alto y sin color de fondo. Es decir: invisible.
+   * El feedback de presionado va por Reanimated y no por el `style` como
+   * función de Pressable: `createAnimatedComponent` pasa el style por
+   * `flattenArray`, que convierte la función en `[fn]`. Pressable sólo la
+   * ejecuta cuando el style ES una función, no cuando es un array que la
+   * contiene, así que el botón se quedaba sin ancho, sin alto y sin color.
    */
-  const mainStyle = useAnimatedStyle(() => ({
+  const buttonStyle = useAnimatedStyle(() => ({
     opacity: interpolate(pressed.value, [0, 1], [1, 0.86]),
     transform: [{ scale: interpolate(pressed.value, [0, 1], [1, 0.94]) }],
   }));
 
-  const plusStyle = useAnimatedStyle(() => ({
+  /**
+   * Los dos íconos viven apilados y se cruzan con un giro corto de 45° y una
+   * escala leve. Un swap seco delataría que son dos elementos distintos; un
+   * giro completo sería más movimiento del que amerita cambiar un ícono.
+   */
+  const chatStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.55], [1, 0]),
     transform: [
-      {
-        rotate: `${interpolate(progress.value, [0, 1], [0, 45])}deg`,
-      },
+      { rotate: `${interpolate(progress.value, [0, 1], [0, -45])}deg` },
+      { scale: interpolate(progress.value, [0, 1], [1, 0.7]) },
     ],
   }));
 
-  return (
-    <View pointerEvents="box-none" style={[styles.container, { bottom }]}>
-      <AnimatedPressable
-        pointerEvents={expanded ? "auto" : "none"}
-        disabled={!expanded}
-        accessibilityElementsHidden={!expanded}
-        importantForAccessibility={expanded ? "yes" : "no-hide-descendants"}
-        onPress={openAgent}
-        accessibilityRole="button"
-        accessibilityLabel="Abrir agente"
-        accessibilityHint="Abre el chat para consultar datos de tus eventos"
-        style={[
-          styles.action,
-          shadow.elevated,
-          {
-            backgroundColor: palette.surface,
-            borderColor: palette.border,
-          },
-          actionStyle,
-        ]}
-      >
-        <View style={[styles.actionIcon, { backgroundColor: palette.surfaceEmphasis }]}>
-          <Feather name="message-circle" size={18} color={palette.primary} />
-        </View>
-        <Text style={[styles.actionLabel, { color: palette.text }]}>Agente</Text>
-      </AnimatedPressable>
+  const closeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.45, 1], [0, 1]),
+    transform: [
+      { rotate: `${interpolate(progress.value, [0, 1], [45, 0])}deg` },
+      { scale: interpolate(progress.value, [0, 1], [0.7, 1]) },
+    ],
+  }));
 
-      <AnimatedPressable
-        onPress={toggle}
-        accessibilityRole="button"
-        accessibilityLabel={expanded ? "Cerrar acceso al agente" : "Abrir acceso al agente"}
-        accessibilityState={{ expanded }}
-        hitSlop={8}
-        onPressIn={() => {
-          pressed.value = reduceMotion ? 1 : withSpring(1, { duration: 120, dampingRatio: 1 });
-        }}
-        onPressOut={() => {
-          pressed.value = reduceMotion ? 0 : withSpring(0, { duration: 160, dampingRatio: 1 });
-        }}
-        style={[
-          styles.mainButton,
-          shadow.elevated,
-          { backgroundColor: palette.primary },
-          mainStyle,
-        ]}
-      >
-        <Animated.View style={plusStyle}>
-          <Feather name="plus" size={26} color={palette.onPrimary} />
+  const setPressed = (value: number) => {
+    pressed.value = reduceMotion ? value : withTiming(value, { duration: 120 });
+  };
+
+  return (
+    <AnimatedPressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={open ? "Cerrar el agente" : "Abrir el agente"}
+      accessibilityState={{ expanded: open }}
+      hitSlop={8}
+      onPressIn={() => setPressed(1)}
+      onPressOut={() => setPressed(0)}
+      style={[
+        styles.button,
+        shadow.elevated,
+        { bottom, backgroundColor: palette.primary },
+        buttonStyle,
+      ]}
+    >
+      <View style={styles.iconStack}>
+        <Animated.View style={[styles.icon, chatStyle]}>
+          <Feather name="message-circle" size={26} color={palette.onPrimary} />
         </Animated.View>
-      </AnimatedPressable>
-    </View>
+        <Animated.View style={[styles.icon, closeStyle]}>
+          <Feather name="x" size={26} color={palette.onPrimary} />
+        </Animated.View>
+      </View>
+    </AnimatedPressable>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  button: {
     position: "absolute",
     right: 20,
-    width: 124,
-    height: 56,
-    alignItems: "flex-end",
-    justifyContent: "flex-end",
-    zIndex: 20,
-    elevation: 20,
-  },
-  mainButton: {
-    width: 56,
-    height: 56,
+    width: SIZE,
+    height: SIZE,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 30,
+    elevation: 30,
   },
-  action: {
+  iconStack: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  icon: {
     position: "absolute",
-    right: 0,
-    bottom: 0,
-    minWidth: 118,
-    height: 48,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  actionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-  },
-  actionLabel: {
-    marginLeft: 9,
-    marginRight: 9,
-    fontSize: 14,
-    fontWeight: "800",
   },
 });
 

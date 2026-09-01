@@ -1,4 +1,5 @@
 import AgentFloatingButton from "@/components/agent/AgentFloatingButton";
+import AgentOverlay from "@/components/agent/AgentOverlay";
 import AgentChat from "@/screens/AgentChat";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
@@ -7,10 +8,9 @@ import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import { Feather } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { NavigationContainer, useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionScreenProtection } from "../hooks/useSessionScreenProtection";
@@ -48,10 +48,12 @@ const AuthNavigator = () => (
 );
 
 const TabsNavigator = () => {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { theme } = useAppState();
   const insets = useSafeAreaInsets();
+  const [agentOpen, setAgentOpen] = useState(false);
+  // Una sola fuente para dónde vive el botón flotante: la capa la necesita para
+  // dejarle aire a los últimos mensajes y no que el botón los tape.
+  const agentButtonBottom = 86 + insets.bottom + 16;
   const isDark = theme === "dark";
   const tabBarStyle = {
     backgroundColor: isDark ? "#171717" : "#ffffff",
@@ -125,10 +127,20 @@ const TabsNavigator = () => {
         />
       </Tab.Navigator>
       {isAgentAvailable() ? (
-        <AgentFloatingButton
-          bottom={86 + insets.bottom + 16}
-          onOpenAgent={() => navigation.navigate("AgentChat")}
-        />
+        <>
+          {/* La capa se declara antes que el botón para que el botón quede
+              por encima y pueda cerrarla desde su posición de arriba. */}
+          <AgentOverlay
+            open={agentOpen}
+            onClose={() => setAgentOpen(false)}
+            buttonBottom={agentButtonBottom}
+          />
+          <AgentFloatingButton
+            open={agentOpen}
+            onToggle={() => setAgentOpen((abierto) => !abierto)}
+            bottom={agentButtonBottom}
+          />
+        </>
       ) : null}
     </View>
   );

@@ -8,6 +8,11 @@ export const lightPalette = {
   background: "#f7f9fb",
   surface: "#ffffff",
   surfaceMuted: "#f2f4f6",
+  // Superficie que se hunde por debajo de la base, para que las tarjetas que
+  // van encima se lean como objetos. En claro `background` dejaba la burbuja
+  // del chat en 1,06 contra su fondo, la mitad de lo que usan iMessage (1,21)
+  // o WhatsApp (1,20); con este tono queda en 1,16.
+  surfaceSunken: "#eceef0",
   surfaceEmphasis: "#e8f1ff",
   card: "#ffffff",
   primary: "#0058bc",
@@ -30,6 +35,10 @@ export const darkPalette = {
   background: "#131313",
   surface: "#201f1f",
   surfaceMuted: "#2a2a2a",
+  // En oscuro la relación se invierte: la superficie que sube es la más clara,
+  // así que hundir el fondo es dejarlo en el negro base. Bajar a `muted`
+  // acercaba el fondo a la burbuja y empeoraba la separación (1,13 -> 1,05).
+  surfaceSunken: "#131313",
   surfaceEmphasis: "#1a2a40",
   card: "#201f1f",
   primary: "#3e90ff",
