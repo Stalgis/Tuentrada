@@ -16,7 +16,6 @@ import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
-import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
 import { getNavigationTheme } from "../lib/theme";
 import { readSplashConfig } from "../lib/splashConfig";
@@ -130,7 +129,6 @@ const AppNavigator = () => (
     <AppStack.Screen name="Tabs" component={TabsNavigator} />
     <AppStack.Screen name="ExecutiveDashboard" component={ExecutiveDashboardScreen} />
     <AppStack.Screen name="Profile" component={ProfileScreen} />
-    <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
     <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
     <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
     <AppStack.Screen name="SalesHistory" component={SalesHistoryScreen} />
