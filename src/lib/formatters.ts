@@ -16,13 +16,6 @@ export const formatCurrencyARS = (value: number) =>
 
 export const formatPercent = (value: number) => `${Math.round(value)}%`;
 
-export const formatDateShort = (value: string) =>
-  new Intl.DateTimeFormat("es-AR", {
-    timeZone: AR_TIME_ZONE,
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
-
 export const formatDateTimeShort = (value: string) =>
   new Intl.DateTimeFormat("es-AR", {
     timeZone: AR_TIME_ZONE,
