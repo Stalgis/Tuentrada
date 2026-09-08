@@ -28,6 +28,10 @@ test("carga y normaliza el catálogo real sin exponer el token", async () => {
     baseUrl: "https://reports.example.test/",
     apiKey: "public-client-key",
     accessToken: "private-user-token",
+    // El presente se fija, como en el resto del archivo: con el reloj real
+    // este caso pasaba a fallar solo, el día que la fecha del fixture quedaba
+    // en el pasado.
+    now: () => Date.parse("2026-08-01T00:00:00Z"),
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return jsonResponse({

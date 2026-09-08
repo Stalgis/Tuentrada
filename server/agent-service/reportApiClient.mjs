@@ -207,6 +207,7 @@ export class ReportApiClient {
   #cacheKey;
   #catalogCache;
   #fetch;
+  #now;
   #eventListPromise = null;
   #reportPromises = new Map();
   #timeoutMs;
@@ -223,11 +224,16 @@ export class ReportApiClient {
     cacheKey = null,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxUpstreamCalls = DEFAULT_MAX_UPSTREAM_CALLS,
+    // Reloj inyectable, como `fetchImpl`: `yaOcurrio` se calcula contra él.
+    // Es una función y no un instante para que un cliente de larga vida no
+    // congele el presente en el momento de construirse.
+    now = Date.now,
   }) {
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
     this.#apiKey = apiKey;
     this.#accessToken = accessToken;
     this.#fetch = fetchImpl;
+    this.#now = now;
     this.#catalogCache = catalogCache;
     this.#cacheKey = cacheKey;
     this.#timeoutMs = timeoutMs;
@@ -316,7 +322,7 @@ export class ReportApiClient {
 
   #loadEvents() {
     return this.#request("/api/v2/report/event-list").then((data) =>
-      normalizeEventList(data?.resources),
+      normalizeEventList(data?.resources, this.#now()),
     );
   }
 
