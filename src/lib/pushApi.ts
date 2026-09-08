@@ -3,6 +3,8 @@ import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { env } from "./env";
 import { backendFetch } from "./backendFetch";
+import { ApiTimeoutError, ApiUnauthorizedError, notifyUnauthorized } from "./reportApi";
+import { currentGeneration } from "./session";
 
 /**
  * Registro de dispositivos y preferencias de notificación.
@@ -18,6 +20,14 @@ import { backendFetch } from "./backendFetch";
  * como clave. Que el backend resuelva `user_id` y `account_id` desde el token.
  */
 export const PUSH_BACKEND_READY = false;
+
+/**
+ * Mientras el backend no exista, el feature sólo se ofrece en desarrollo: sirve
+ * para obtener el token y probar el camino completo. En una build de release
+ * los interruptores quedan deshabilitados, porque prometer un aviso que nadie
+ * puede enviar es peor que no ofrecerlo.
+ */
+export const PUSH_FEATURE_ENABLED = PUSH_BACKEND_READY || __DEV__;
 
 const PREFERENCES_KEY = "tuentrada_notification_prefs";
 const PUSH_TOKEN_KEY = "tuentrada_push_token";
@@ -45,6 +55,50 @@ const makeHeaders = (accessToken: string): Record<string, string> => ({
   Authorization: `Bearer ${accessToken}`,
   "x-api-key": env.apiKey,
 });
+
+// Mismo tope que el resto del backend: el gateway corta a los ~31s con un 504.
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * `backendFetch` es un fetch pelado: no rechaza ante 401, 404 ni 500. Sin esta
+ * envoltura, un PUT fallido se leería como éxito y la app mostraría el
+ * interruptor activo con el backend sin enterarse. El 401 además avisa al
+ * AuthProvider, igual que las peticiones de reportes.
+ */
+const pushFetch = async (
+  path: string,
+  accessToken: string,
+  init: { method: "POST" | "PUT" | "DELETE"; body?: unknown },
+): Promise<void> => {
+  const gen = currentGeneration();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await backendFetch(`${env.baseUrl}${path}`, {
+      method: init.method,
+      headers: makeHeaders(accessToken),
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: controller.signal,
+    });
+
+    if (response.status === 401) {
+      notifyUnauthorized(gen);
+      throw new ApiUnauthorizedError();
+    }
+
+    if (!response.ok) {
+      throw new Error("No se pudo guardar la preferencia. Intentá de nuevo.");
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiTimeoutError();
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 const logSimulated = (action: string, payload: unknown): void => {
   if (__DEV__) {
@@ -99,28 +153,27 @@ export const readStoredPreferences = async (): Promise<NotificationPreferences> 
 };
 
 /**
- * Guarda siempre en el dispositivo y, si hay sesión, replica en el backend:
- * quien filtra los envíos es el backend, pero la pantalla tiene que reflejar
- * lo elegido aunque la red falle.
+ * El backend manda primero y el guardado local va después: quien filtra los
+ * envíos es el servidor, así que una preferencia que él no registró no puede
+ * quedar marcada como activa en la pantalla. Si el PUT falla, no se persiste
+ * nada y el interruptor vuelve a donde estaba.
  */
 export const savePreferences = async (
   preferences: NotificationPreferences,
   accessToken?: string,
 ): Promise<void> => {
-  await SecureStore.setItemAsync(PREFERENCES_KEY, JSON.stringify(preferences));
-
-  if (!accessToken) return;
-
-  if (!PUSH_BACKEND_READY) {
-    logSimulated("PUT /api/v1/notification-preferences", preferences);
-    return;
+  if (accessToken) {
+    if (PUSH_BACKEND_READY) {
+      await pushFetch("/api/v1/notification-preferences", accessToken, {
+        method: "PUT",
+        body: preferences,
+      });
+    } else {
+      logSimulated("PUT /api/v1/notification-preferences", preferences);
+    }
   }
 
-  await backendFetch(`${env.baseUrl}/api/v1/notification-preferences`, {
-    method: "PUT",
-    headers: makeHeaders(accessToken),
-    body: JSON.stringify(preferences),
-  });
+  await SecureStore.setItemAsync(PREFERENCES_KEY, JSON.stringify(preferences));
 };
 
 // ─── Dispositivos ─────────────────────────────────────────────────────────────
@@ -137,46 +190,50 @@ export const registerDevice = async (
   accessToken: string,
   registration: DeviceRegistration,
 ): Promise<void> => {
-  await SecureStore.setItemAsync(PUSH_TOKEN_KEY, registration.expoPushToken);
-
-  if (!PUSH_BACKEND_READY) {
+  if (PUSH_BACKEND_READY) {
+    await pushFetch("/api/v1/devices", accessToken, {
+      method: "POST",
+      body: registration,
+    });
+  } else {
     logSimulated("POST /api/v1/devices", registration);
-    return;
   }
 
-  await backendFetch(`${env.baseUrl}/api/v1/devices`, {
-    method: "POST",
-    headers: makeHeaders(accessToken),
-    body: JSON.stringify(registration),
-  });
+  // Se guarda después del alta: un token que el backend no aceptó no debe
+  // quedar registrado acá como si estuviera activo.
+  await SecureStore.setItemAsync(PUSH_TOKEN_KEY, registration.expoPushToken);
 };
 
 /**
- * Baja del dispositivo en el cierre de sesión manual. No propaga errores: el
- * cierre de sesión no puede quedar colgado de una petición de red, y el
- * backend igual invalida el token cuando Apple o Google lo rechacen.
+ * Borra el estado local de notificaciones. Se llama en **todo** cierre de
+ * sesión, no sólo en el manual: las preferencias viven en un almacenamiento
+ * global del teléfono, así que si la sesión de A vence y entra B, B heredaría
+ * los interruptores de A y su dispositivo se registraría sin que lo pidiera.
  */
-export const unregisterDeviceOnLogout = async (accessToken: string): Promise<void> => {
-  const expoPushToken = await readStoredPushToken();
-
+export const clearStoredPushState = async (): Promise<void> => {
   await Promise.all([
     SecureStore.deleteItemAsync(PUSH_TOKEN_KEY).catch(() => {}),
-    // Las preferencias son de este usuario, no del teléfono: si entra otra
-    // cuenta no debe heredar los interruptores de la anterior.
     SecureStore.deleteItemAsync(PREFERENCES_KEY).catch(() => {}),
   ]);
+};
 
-  if (!expoPushToken) return;
-
+/**
+ * Baja del dispositivo en el backend, sólo en el cierre manual. No propaga
+ * errores: el cierre de sesión no puede quedar colgado de una petición de red,
+ * y el backend igual invalida el token cuando Apple o Google lo rechacen.
+ */
+export const unregisterDevice = async (
+  accessToken: string,
+  expoPushToken: string,
+): Promise<void> => {
   if (!PUSH_BACKEND_READY) {
     logSimulated("DELETE /api/v1/devices", { expoPushToken });
     return;
   }
 
   try {
-    await backendFetch(`${env.baseUrl}/api/v1/devices/${encodeURIComponent(expoPushToken)}`, {
+    await pushFetch(`/api/v1/devices/${encodeURIComponent(expoPushToken)}`, accessToken, {
       method: "DELETE",
-      headers: makeHeaders(accessToken),
     });
   } catch {
     // silencio deliberado: ver comentario del bloque

@@ -20,7 +20,7 @@ import {
 } from "../lib/authApi";
 import { clearAllCaches } from "../lib/apiClient";
 import { clearPendingDestination } from "../lib/pendingNotification";
-import { unregisterDeviceOnLogout } from "../lib/pushApi";
+import { clearStoredPushState, readStoredPushToken, unregisterDevice } from "../lib/pushApi";
 import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
 import { bumpGeneration, currentGeneration, isCurrentGeneration } from "../lib/session";
 import type { User } from "../lib/types";
@@ -370,16 +370,24 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       // 2) política biométrica: solo el cierre manual borra las credenciales
       if (reason === "user") {
         await clearBiometricStorage();
-        // Mismo criterio para las notificaciones: el cierre manual da de baja
-        // el dispositivo y borra las preferencias, para que otra cuenta en este
-        // teléfono no herede los avisos de la anterior. Una sesión vencida no
-        // las toca: es el mismo usuario y va a volver a entrar.
-        if (tokenSnapshot) {
-          void unregisterDeviceOnLogout(tokenSnapshot);
-        }
       }
 
-      // 3) aviso al servidor, sin bloquear la UI
+      // 3) notificaciones: el estado local se borra en todo cierre, manual o
+      // no. Las preferencias y el push token viven en un almacenamiento del
+      // teléfono, no de la cuenta: si vence la sesión de A y entra B, B
+      // heredaría los interruptores de A y su dispositivo quedaría registrado
+      // sin haberlo pedido. Se espera el borrado —no se dispara y olvida—
+      // porque un login inmediato podría leerlas antes de que se borren.
+      const pushTokenSnapshot = await readStoredPushToken();
+      await clearStoredPushState();
+
+      // La baja en el backend sí es sólo del cierre manual: si la sesión
+      // venció, el token ya no sirve para autenticar la petición.
+      if (reason === "user" && tokenSnapshot && pushTokenSnapshot) {
+        void unregisterDevice(tokenSnapshot, pushTokenSnapshot);
+      }
+
+      // 4) aviso al servidor, sin bloquear la UI
       if (tokenSnapshot) {
         logoutApi(tokenSnapshot);
       }

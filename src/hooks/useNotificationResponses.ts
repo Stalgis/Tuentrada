@@ -11,9 +11,8 @@ import { parseNotificationDestination } from "../lib/pushPayload";
  * exista sesión, porque `AuthProvider` empieza en `unauthenticated`.
  */
 
-// `getLastNotificationResponseAsync` sigue devolviendo la última respuesta en
-// arranques posteriores. Sin esta guarda, reabrir la app volvería a empujar al
-// usuario al mismo informe.
+// Guarda dentro del proceso: el listener y el arranque en frío pueden entregar
+// la misma respuesta.
 const handledResponses = new Set<string>();
 
 const handleResponse = (response: Notifications.NotificationResponse | null): void => {
@@ -23,6 +22,16 @@ const handleResponse = (response: Notifications.NotificationResponse | null): vo
   if (identifier) {
     if (handledResponses.has(identifier)) return;
     handledResponses.add(identifier);
+  }
+
+  // El Set vive en memoria y muere con el proceso, que es justo cuando
+  // `getLastNotificationResponseAsync` sigue devolviendo la última respuesta:
+  // sin esto, cada arranque posterior volvería a empujar al usuario al mismo
+  // informe. Se limpia en el nativo apenas la tomamos.
+  try {
+    Notifications.clearLastNotificationResponse();
+  } catch {
+    // Entorno sin el módulo: la guarda en memoria alcanza para esta sesión.
   }
 
   const destination = parseNotificationDestination(
@@ -46,11 +55,18 @@ export const useNotificationResponses = (): void => {
         // Sin respuesta previa o entorno sin soporte: no hay nada que abrir.
       });
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    // Este hook envuelve toda la app: si registrar el listener tira —Expo Go en
+    // Android ya no trae el módulo de push— no puede llevarse puesto el render.
+    let subscription: Notifications.EventSubscription | null = null;
+    try {
+      subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    } catch {
+      // Entorno sin soporte: la app funciona, sólo no enruta desde un aviso.
+    }
 
     return () => {
       cancelled = true;
-      subscription.remove();
+      subscription?.remove();
     };
   }, []);
 };

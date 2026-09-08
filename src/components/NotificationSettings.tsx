@@ -35,8 +35,9 @@ const NotificationSettings = () => {
   const { theme } = useAppState();
   const palette = getPalette(theme);
   const {
-    supported,
+    available,
     unsupportedReason,
+    backendReady,
     permission,
     preferences,
     busyCategory,
@@ -48,15 +49,15 @@ const NotificationSettings = () => {
   const blocked = permission === "denied";
   const anyEnabled = preferences.functionReports || preferences.weeklySummary;
 
-  const statusLabel = !supported
-    ? "No disponible en este entorno"
+  const statusLabel = !available
+    ? "No disponible todavía"
     : blocked
       ? "Bloqueadas desde el teléfono"
       : anyEnabled
         ? "Activadas"
         : "Desactivadas";
 
-  const statusColor = !supported || blocked ? palette.warning : anyEnabled ? palette.success : palette.subtext;
+  const statusColor = !available || blocked ? palette.warning : anyEnabled ? palette.success : palette.subtext;
 
   const handleToggle = (category: NotificationCategory, next: boolean) => {
     if (!next) {
@@ -110,7 +111,7 @@ const NotificationSettings = () => {
               <Switch
                 value={preferences[category.key]}
                 onValueChange={(next) => handleToggle(category.key, next)}
-                disabled={!supported || busyCategory !== null}
+                disabled={!available || busyCategory !== null}
                 trackColor={{ false: palette.muted, true: palette.primarySoft }}
                 thumbColor={preferences[category.key] ? palette.primary : undefined}
                 accessibilityLabel={category.label}
@@ -132,9 +133,19 @@ const NotificationSettings = () => {
         </Text>
       ) : null}
 
-      {!supported && unsupportedReason ? (
+      {!available ? (
         <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.md }}>
-          {unsupportedReason}
+          {unsupportedReason ??
+            "Los avisos de informes todavía no están disponibles. Te avisamos cuando se activen."}
+        </Text>
+      ) : null}
+
+      {/* En desarrollo el feature se puede usar para obtener el token y probar
+          el camino completo, pero la pantalla no puede dar a entender que hay
+          alguien del otro lado enviando. */}
+      {available && !backendReady ? (
+        <Text style={{ ...typography.body, color: palette.warning, marginTop: spacing.md }}>
+          Modo de prueba: el servidor todavía no envía estos avisos.
         </Text>
       ) : null}
 
