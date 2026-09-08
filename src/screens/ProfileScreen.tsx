@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppStackParamList } from "../navigation/types";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
+import NotificationSettings from "../components/NotificationSettings";
 import Chip from "../components/stitch/Chip";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
@@ -111,6 +112,8 @@ const ProfileScreen = () => {
               </Pressable>
             ) : null}
           </SurfaceCard>
+
+          <NotificationSettings />
 
           <SurfaceCard>
             <Text style={{ ...typography.title, color: palette.text }}>Ayuda</Text>

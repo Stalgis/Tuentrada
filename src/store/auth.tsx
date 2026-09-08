@@ -19,6 +19,8 @@ import {
   type AuthTokens,
 } from "../lib/authApi";
 import { clearAllCaches } from "../lib/apiClient";
+import { clearPendingDestination } from "../lib/pendingNotification";
+import { unregisterDeviceOnLogout } from "../lib/pushApi";
 import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
 import { bumpGeneration, currentGeneration, isCurrentGeneration } from "../lib/session";
 import type { User } from "../lib/types";
@@ -362,10 +364,19 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       setAccessToken(undefined);
       pendingCredentialsRef.current = null;
       setShouldPromptBiometricEnrollment(false);
+      // Un aviso tocado por esta sesión no puede abrirse dentro de la próxima.
+      clearPendingDestination();
 
       // 2) política biométrica: solo el cierre manual borra las credenciales
       if (reason === "user") {
         await clearBiometricStorage();
+        // Mismo criterio para las notificaciones: el cierre manual da de baja
+        // el dispositivo y borra las preferencias, para que otra cuenta en este
+        // teléfono no herede los avisos de la anterior. Una sesión vencida no
+        // las toca: es el mismo usuario y va a volver a entrar.
+        if (tokenSnapshot) {
+          void unregisterDeviceOnLogout(tokenSnapshot);
+        }
       }
 
       // 3) aviso al servidor, sin bloquear la UI

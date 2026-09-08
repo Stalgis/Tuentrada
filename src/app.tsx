@@ -6,6 +6,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
 import { AppStateProvider, useAppState } from "./store/appState";
 import { AuthProvider } from "./store/auth";
+import { PushProvider } from "./store/push";
+import { useNotificationResponses } from "./hooks/useNotificationResponses";
 import Navigator from "./navigation/RootNavigator";
 
 const ThemedContainer = ({ children }: { children: React.ReactNode }) => {
@@ -26,14 +28,27 @@ const ThemedContainer = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+/**
+ * Los avisos tocados se escuchan por encima del gate de autenticación: el
+ * arranque en frío ocurre antes de que exista sesión.
+ */
+const NotificationListeners = ({ children }: { children: React.ReactNode }) => {
+  useNotificationResponses();
+  return <>{children}</>;
+};
+
 export const AppContainer = () => (
   <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <AuthProvider>
         <AppStateProvider>
-          <ThemedContainer>
-            <Navigator />
-          </ThemedContainer>
+          <PushProvider>
+            <NotificationListeners>
+              <ThemedContainer>
+                <Navigator />
+              </ThemedContainer>
+            </NotificationListeners>
+          </PushProvider>
         </AppStateProvider>
       </AuthProvider>
     </SafeAreaProvider>

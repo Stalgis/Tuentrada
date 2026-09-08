@@ -4,6 +4,7 @@ import AgentChat from "@/screens/AgentChat";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
+import ReportScreen from "@/screens/ReportScreen";
 import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import { Feather } from "@expo/vector-icons";
@@ -23,6 +24,7 @@ import FunctionDetailScreen from "../screens/FunctionDetailScreen";
 import LoginScreen from "../screens/LoginScreen";
 import { useAppState } from "../store/appState";
 import { useAuth } from "../store/auth";
+import NotificationRouter, { navigationRef } from "./NotificationRouter";
 import {
   AppStackParamList,
   AuthStackParamList,
@@ -147,18 +149,23 @@ const TabsNavigator = () => {
 };
 
 const AppNavigator = () => (
-  <AppStack.Navigator screenOptions={{ headerShown: false }}>
-    <AppStack.Screen name="Tabs" component={TabsNavigator} />
-    <AppStack.Screen
-      name="ExecutiveDashboard"
-      component={ExecutiveDashboardScreen}
-    />
-    <AppStack.Screen name="Profile" component={ProfileScreen} />
-    <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
-    <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
-    <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
-    <AppStack.Screen name="AgentChat" component={AgentChat} />
-  </AppStack.Navigator>
+  <>
+    <AppStack.Navigator screenOptions={{ headerShown: false }}>
+      <AppStack.Screen name="Tabs" component={TabsNavigator} />
+      <AppStack.Screen
+        name="ExecutiveDashboard"
+        component={ExecutiveDashboardScreen}
+      />
+      <AppStack.Screen name="Profile" component={ProfileScreen} />
+      <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
+      <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
+      <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
+      <AppStack.Screen name="Report" component={ReportScreen} />
+      <AppStack.Screen name="AgentChat" component={AgentChat} />
+    </AppStack.Navigator>
+    {/* Fuera del navigator: sólo enruta, no pinta nada. */}
+    <NotificationRouter />
+  </>
 );
 
 const RootNavigator = () => {
@@ -219,7 +226,7 @@ const RootNavigator = () => {
   );
 
   return (
-    <NavigationContainer theme={getNavigationTheme(theme)}>
+    <NavigationContainer ref={navigationRef} theme={getNavigationTheme(theme)}>
       {status === "checking" ? (
         renderSplash()
       ) : status === "authenticated" ? (

@@ -1,6 +1,7 @@
 import type { CompositeNavigationProp, NavigatorScreenParams } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type { NotificationDestination } from "../lib/pushPayload";
 
 export type EventsStackParamList = {
   EventsList: undefined;
@@ -24,6 +25,9 @@ export type AppStackParamList = {
   TrendDetail: { eventId: string; selectedIndex?: number };
   EventDetail: { eventId: string };
   FunctionDetail: { functionId: string };
+  // Los parámetros del informe son exactamente el destino que viaja en la
+  // notificación, para que abrirlo desde un aviso no necesite traducción.
+  Report: NotificationDestination;
   AgentChat: undefined;
 };
 
