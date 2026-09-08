@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
+import { Image } from "expo-image";
+import Constants from "expo-constants";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -9,13 +11,14 @@ import DashboardScreen from "../screens/DashboardScreen";
 import EventsListScreen from "../screens/EventsListScreen";
 import EventDetailScreen from "../screens/EventDetailScreen";
 import FunctionDetailScreen from "../screens/FunctionDetailScreen";
+import SalesHistoryScreen from "../screens/SalesHistoryScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import SalesAnalyticsScreen from "@/screens/SalesAnalyticsScreen";
 import ExecutiveDashboardScreen from "@/screens/ExecutiveDashboardScreen";
-import TrendDetailScreen from "@/screens/TrendDetailScreen";
 import PaymentScreen from "@/screens/PaymentScreen";
 import { getNavigationTheme } from "../lib/theme";
+import { readSplashConfig } from "../lib/splashConfig";
 import {
   EventsStackParamList,
   RootTabParamList,
@@ -25,6 +28,11 @@ import {
 import { useAuth } from "../store/auth";
 import { useAppState } from "../store/appState";
 import { useSessionScreenProtection } from "../hooks/useSessionScreenProtection";
+
+// Sale del mismo bloque de app.json que configura el splash nativo, en vez de
+// estar copiado acá: si divergen, el traspaso del splash nativo a este vuelve
+// a verse como un salto, y nada lo delataría.
+const SPLASH = readSplashConfig(Constants.expoConfig?.plugins);
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const EventsStack = createNativeStackNavigator<EventsStackParamList>();
@@ -121,9 +129,9 @@ const AppNavigator = () => (
     <AppStack.Screen name="Tabs" component={TabsNavigator} />
     <AppStack.Screen name="ExecutiveDashboard" component={ExecutiveDashboardScreen} />
     <AppStack.Screen name="Profile" component={ProfileScreen} />
-    <AppStack.Screen name="TrendDetail" component={TrendDetailScreen} />
     <AppStack.Screen name="EventDetail" component={EventDetailScreen} />
     <AppStack.Screen name="FunctionDetail" component={FunctionDetailScreen} />
+    <AppStack.Screen name="SalesHistory" component={SalesHistoryScreen} />
   </AppStack.Navigator>
 );
 
@@ -174,9 +182,22 @@ const RootNavigator = () => {
 
   const renderAuth = () => <AuthNavigator />;
 
+  // Continuación del splash nativo mientras se verifica la sesión. Repite su
+  // fondo, y su logo al mismo ancho y centrado igual, para que el traspaso no
+  // se vea: sin esto la pantalla saltaba del azul al blanco por un instante.
+  // El indicador va absoluto para no correr el logo de su centro.
   const renderSplash = () => (
-    <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-      <ActivityIndicator size="large" color="#0058bc" />
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: SPLASH.backgroundColor }}>
+      <Image
+        source={require("../../assets/images/splash-icon.png")}
+        contentFit="contain"
+        style={{ width: SPLASH.imageWidth, height: SPLASH.imageWidth * (298 / 745) }}
+      />
+      <ActivityIndicator
+        size="large"
+        color="#ffffff"
+        style={{ position: "absolute", bottom: "22%" }}
+      />
     </View>
   );
 

@@ -21,9 +21,10 @@ export type AppStackParamList = {
   Tabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Profile: undefined;
   ExecutiveDashboard: undefined;
-  TrendDetail: { eventId: string; selectedIndex?: number };
   EventDetail: { eventId: string };
   FunctionDetail: { functionId: string };
+  /** `functionId` acota el histórico a una función; si falta, se consultan todas. */
+  SalesHistory: { eventId: string; functionId?: string };
 };
 
 /**

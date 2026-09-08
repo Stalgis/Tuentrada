@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle } from "react-native-svg";
 import { useAppState } from "../../store/appState";
 import { getPalette } from "../../lib/theme";
 
@@ -56,30 +56,6 @@ export const MiniBarChart = ({
         );
       })}
     </View>
-  );
-};
-
-export const Sparkline = ({ data }: { data: number[] }) => {
-  const { theme } = useAppState();
-  const palette = getPalette(theme);
-  const width = 220;
-  const height = 76;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = Math.max(max - min, 1);
-
-  const path = data
-    .map((value, index) => {
-      const x = (index / Math.max(data.length - 1, 1)) * width;
-      const y = height - ((value - min) / range) * (height - 8) - 4;
-      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
-    })
-    .join(" ");
-
-  return (
-    <Svg width={width} height={height}>
-      <Path d={path} stroke={palette.primary} strokeWidth={3} fill="none" />
-    </Svg>
   );
 };
 
