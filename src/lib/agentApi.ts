@@ -34,55 +34,39 @@ const getAgentApiUrl = () => {
 };
 
 export const askAgent = async ({
-  accessToken,
-  message,
-  conversationId,
-  signal,
+  accessToken, message, conversationId, continuation = false, signal,
 }: {
-  accessToken: string;
-  message: string;
-  conversationId: string;
-  signal?: AbortSignal;
+  accessToken: string; message: string; conversationId: string;
+  continuation?: boolean; signal?: AbortSignal;
 }): Promise<AgentResponse> => {
-  // Generación capturada antes de salir: identifica a qué sesión pertenece
-  // esta petición cuando la respuesta llegue.
   const gen = currentGeneration();
-
-  const response = await fetch(`${getAgentApiUrl()}/api/agent/chat`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ message, conversationId }),
-    signal,
-  });
-
-  let payload: unknown;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
   try {
-    payload = await response.json();
-  } catch {
-    throw new AgentApiError(
-      response.status,
-      "El agente devolvió una respuesta inválida.",
-      "transport",
-    );
-  }
-
-  try {
-    return interpretAgentResponse({
-      status: response.status,
-      ok: response.ok,
-      payload,
+    const response = await fetch(`${getAgentApiUrl()}/api/agent/chat`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ message, conversationId, continuation }), signal: controller.signal,
     });
-  } catch (error) {
-    // Un 401 del agente significa lo mismo que un 401 de reportes: la sesión
-    // murió. Se dispara el mismo teardown, con la guarda de generación para
-    // que una respuesta tardía de una sesión anterior no cierre la vigente.
-    if (error instanceof AgentApiError && error.kind === "session") {
+    // Un gateway puede devolver 401 con HTML o sin body. El estado HTTP sigue
+    // invalidando la sesión incluso si no se puede interpretar JSON.
+    if (response.status === 401) {
       notifyUnauthorized(gen);
+      throw new AgentApiError(401, "La sesión venció o no es válida.", "session");
     }
+    let payload: unknown;
+    try { payload = await response.json(); }
+    catch { throw new AgentApiError(response.status, "El agente devolvió una respuesta inválida.", "transport"); }
+    return interpretAgentResponse({ status: response.status, ok: response.ok, payload });
+  } catch (error) {
+    if (timedOut) throw new AgentApiError(504, "La consulta tardó demasiado. Podés reintentar.", "transport");
     throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 };

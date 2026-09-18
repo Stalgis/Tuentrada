@@ -36,6 +36,7 @@ export class AgentApiError extends Error {
 
 export type AgentResponse = {
   answer: string;
+  conversationReset?: boolean;
   requestId?: string;
   toolCalls?: { toolName: string; parameters: unknown }[];
 };
@@ -80,5 +81,5 @@ export const interpretAgentResponse = ({
     );
   }
 
-  return { answer: data.answer, requestId, toolCalls: data.toolCalls };
+  return { answer: data.answer, requestId, toolCalls: data.toolCalls, ...(data.conversationReset === true ? { conversationReset: true } : {}) };
 };

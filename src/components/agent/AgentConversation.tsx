@@ -146,8 +146,10 @@ const AgentConversation = ({
   const scrollRef = useRef<ScrollView>(null);
   const requestRef = useRef<AbortController | null>(null);
   const nextIdRef = useRef(2);
-  const ownConversationIdRef = useRef(newConversationId());
-  const activeConversationId = conversationId ?? ownConversationIdRef.current;
+  const [ownConversationId, setOwnConversationId] = useState(newConversationId);
+  const activeConversationId = ownConversationId;
+  useEffect(() => { if (conversationId) setOwnConversationId(conversationId); }, [conversationId]);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const signedIn = Boolean(accessToken);
@@ -179,6 +181,7 @@ const AgentConversation = ({
     const message = (suggestedMessage ?? input).trim();
     if (!message || loading || !accessToken) return;
 
+    setRetryMessage(null);
     setInput("");
     appendMessage({ role: "user", text: message });
     setLoading(true);
@@ -191,7 +194,9 @@ const AgentConversation = ({
         message,
         conversationId: activeConversationId,
         signal: controller.signal,
+        continuation: messages.some(item => item.role === "user"),
       });
+      if (result.conversationReset) appendMessage({ role: "system", text: "El historial anterior venció o el servicio se reinició. Esta respuesta inicia una conversación nueva." });
       appendMessage({
         role: "assistant",
         text: result.answer,
@@ -203,6 +208,7 @@ const AgentConversation = ({
         return;
       }
 
+      setRetryMessage(message);
       if (error instanceof AgentApiError) {
         // Una sesión vencida no es una respuesta del agente. El store ya está
         // cerrando la sesión por el hook de 401; acá sólo se explica por qué
@@ -218,7 +224,7 @@ const AgentConversation = ({
 
       appendMessage({
         role: "system",
-        text: "No se pudo conectar con el agente. Verificá que el servicio Node esté iniciado.",
+        text: "No se pudo conectar con el agente. Revisá tu conexión e intentá de nuevo.",
         tone: "error",
       });
     } finally {
@@ -237,12 +243,23 @@ const AgentConversation = ({
             arranca directo contra el scrim. */}
         <View
           style={{
-            height: spacing["2xl"],
+            minHeight: layout.touchTarget,
+            paddingHorizontal: spacing.lg,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
             backgroundColor: palette.background,
             borderBottomWidth: 1,
             borderBottomColor: palette.border,
           }}
-        />
+        >
+          <Text style={{ ...typography.label, color: palette.text }}>Agente</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Iniciar una conversación nueva" disabled={loading} onPress={() => {
+            setOwnConversationId(newConversationId()); setMessages([SALUDO]); setInput(""); setRetryMessage(null);
+          }} style={{ minHeight: layout.touchTarget, justifyContent: "center", opacity: loading ? 0.5 : 1 }}>
+            <Text style={{ color: palette.primary }}>Nueva conversación</Text>
+          </Pressable>
+        </View>
         <ScrollView
           ref={scrollRef}
           // Fondo hundido para que las burbujas se lean como objetos y no como
@@ -432,6 +449,11 @@ const AgentConversation = ({
           ) : null}
         </ScrollView>
 
+        {retryMessage && !loading ? (
+          <Pressable accessibilityRole="button" onPress={() => void send(retryMessage)} style={{ padding: spacing.md }}>
+            <Text style={{ color: palette.primary, textAlign: "center" }}>Reintentar última consulta</Text>
+          </Pressable>
+        ) : null}
         {!signedIn ? (
           <View
             style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}
@@ -505,7 +527,7 @@ const AgentConversation = ({
               label="Enviar pregunta"
               icon="arrow-up"
               accent={palette.primary}
-              onAccent={palette.primary}
+              onAccent={palette.onPrimary}
               mutedSurface={palette.surfaceMuted}
             />
           )}

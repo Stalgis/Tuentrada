@@ -1,20 +1,21 @@
 # Servicio Node del agente
 
-Conecta una única herramienta de solo lectura al catálogo real del usuario
-autenticado. Todavía no consulta ventas, recaudación, pagos ni sectores.
+Conecta cinco herramientas de datos de solo lectura al backend del usuario
+autenticado: eventos, ventas, evolución, pagos y disponibilidad. Una sexta
+herramienta consulta ayuda versionada de la app.
 
 ## Flujo
 
 ```text
 Expo AuthProvider
   -> Authorization: Bearer <accessToken>
-  -> POST /api/agent/chat { message, conversationId }
+  -> POST /api/agent/chat { message, conversationId, continuation }
   -> validación contra /api/v2/report/event-list
   -> ReportApiClient ligado a esa sesión
   -> topes: presupuesto diario, límite por sesión, concurrencia
   -> historial previo de esa conversación
   -> RunContext local
-  -> tool buscar_eventos
+  -> herramientas de datos o ayuda_app
   -> respuesta del agente + requestId
 ```
 
@@ -61,7 +62,7 @@ No usar `0.0.0.0` como URL en la app. Es una dirección de escucha, no una
 dirección a la que el teléfono pueda conectarse.
 
 Si `EXPO_PUBLIC_AGENT_API_URL` no está definida y la build no es de desarrollo,
-la app esconde la tarjeta "Agente beta": no tiene sentido dejar entrar a una
+la app esconde el botón del agente: no tiene sentido dejar entrar a una
 pantalla que va a fallar al primer envío.
 
 ## El arranque falla a propósito si
@@ -86,14 +87,14 @@ Un fallo de red al verificar el modelo sólo avisa, no bloquea.
 
 2. Iniciar o recargar Expo después de cambiar variables `EXPO_PUBLIC_*`.
 3. Iniciar sesión con un usuario real.
-4. Abrir **Perfil -> Agente beta -> Probar agente**.
+4. Abrir el **botón flotante de chat** en una pestaña principal.
 5. Preguntar `¿Cuántos eventos tengo?` y después `¿y la semana que viene?`, para
    verificar que el agente mantiene el hilo.
 
 ## Conversaciones
 
-La app genera un `conversationId` por apertura de la pantalla y lo manda en cada
-mensaje. El servicio guarda el historial con clave
+La app mantiene un `conversationId` mientras vive el chat, incluso al cerrar
+la capa. Nueva conversación lo renueva; un cambio de sesión borra los mensajes. El servicio guarda el historial con clave
 `${fingerprintDelToken}:${conversationId}`.
 
 El fingerprint en la clave no es decorativo: sin él, mandar el `conversationId`
@@ -207,3 +208,36 @@ tokens del día y presupuesto configurado.
 El acceso a datos de ventas está planeado en [PLAN-DATOS.md](PLAN-DATOS.md). El
 paso 1 (catálogo de dos niveles y `ref`) ya está; siguen `resumen_de_ventas`,
 `evolucion_de_ventas`, `medios_de_pago` y `disponibilidad`.
+
+
+## Cambios de fiabilidad y evaluación
+
+- La lectura del body respeta el timeout; una conexión incompleta no retiene un cupo.
+- Dos rangos de comparación tienen fechas independientes (`compararDesde/Hasta`).
+- Fechas inexistentes como 2026-02-30 se rechazan antes de consultar reportes.
+- El cliente tiene timeout y reconoce 401 aunque el gateway no devuelva JSON.
+- `conversationReset` avisa cuando una continuación llega sin historial disponible.
+- El chat permite reintentar errores y comenzar una conversación nueva.
+- Las trazas del SDK excluyen contenido sensible (`traceIncludeSensitiveData: false`).
+  El log de herramientas conserva alcance y períodos; no registrar tokens ni importes.
+
+`npm run agent:eval` lista los casos sintéticos sin consumir API.
+`npm run agent:eval -- --live --smoke` prueba ventas, disponibilidad y ayuda.
+`npm run agent:eval -- --live` ejecuta todos los casos contra el modelo configurado.
+Los resultados quedan en `/tmp/tuentrada-agent-evals.json` o `AGENT_EVAL_OUTPUT`.
+Estas evaluaciones verifican herramientas, parámetros y algunas restricciones;
+no reemplazan los checks con datos reales ni una evaluación humana de exactitud.
+
+## Despliegue inicial
+
+Una instancia detrás de HTTPS. El historial, concurrencia y presupuesto del agente
+siguen en memoria; reiniciar los resetea. Antes de múltiples réplicas o de usar el
+presupuesto como tope contable estricto, mover estos controles a almacenamiento
+compartido. Configurar además el límite de gasto de la cuenta de API.
+
+Desde la raíz: `docker build -f server/Dockerfile -t tuentrada-services .`.
+Pasar secretos en runtime, `AGENT_ALLOWED_ORIGIN` explícito y las variables de
+reportes/OpenAI. El contenedor no copia `.env`, claves ni archivos de cuentas.
+Para notificaciones, usar la misma imagen con comando
+`node server/notification-service/index.mjs`, volumen en `/app/var` y las
+variables de `server/notification-service/README.md`. Ejecutar como una instancia.

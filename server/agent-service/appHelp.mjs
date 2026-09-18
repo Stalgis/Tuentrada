@@ -1,0 +1,8 @@
+/** Ayuda versionada junto a las pantallas. No contiene información de cuentas. */
+export const APP_HELP = Object.freeze({
+  agente: "Abrí el botón flotante de chat en las pestañas principales. Podés consultar eventos, ventas, evolución, medios de pago y disponibilidad de un evento. Nueva conversación borra el contexto visible; cancelar detiene la consulta. El historial puede vencer tras 30 minutos de inactividad. El agente no modifica eventos ni ventas.",
+  notificaciones: "En Perfil, la sección Notificaciones permite activar informes de funciones y resumen semanal. Primero hay que permitir avisos en el sistema. Si están bloqueados, usá Abrir configuración del dispositivo. Los avisos sólo se ofrecen cuando el servicio está configurado. Al tocar un aviso, iniciá sesión si hace falta: la app abre el informe guardado. El horario semanal es lunes a las 09:00 en la zona horaria de la cuenta.",
+  eventos: "En la pestaña Eventos podés abrir un evento y consultar sus funciones. Un evento puede tener varias fechas. Para consultar una cifra al agente, indicá el nombre del evento y el período de venta. Dos eventos con el mismo nombre pueden resultar ambiguos: pedí aclaración.",
+  ventas: "La pestaña Ventas muestra análisis de ventas y Pagos muestra medios de pago. La fecha en que se compró una entrada y la fecha de la función son cosas distintas. Las invitaciones no son entradas pagas; recaudación y precio promedio se expresan en pesos argentinos.",
+  sesion: "Iniciá sesión con tus credenciales del proveedor. Perfil permite cerrar sesión y configurar el acceso biométrico en dispositivos compatibles. La app no permite cambiar la contraseña: esa gestión corresponde al proveedor. Una sesión vencida requiere volver a ingresar.",
+});

@@ -27,6 +27,7 @@ const schema = z.object({
   EXPO_PUBLIC_API_KEY: z.string().trim().min(1, "es requerido"),
   EXPO_PUBLIC_SENTRY_DSN: z.string().trim().optional(),
   EXPO_PUBLIC_AGENT_API_URL: optionalUrlSchema,
+  EXPO_PUBLIC_NOTIFICATIONS_API_URL: optionalUrlSchema,
 });
 
 const parsed = schema.safeParse({
@@ -35,6 +36,7 @@ const parsed = schema.safeParse({
   EXPO_PUBLIC_API_KEY: process.env.EXPO_PUBLIC_API_KEY,
   EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
   EXPO_PUBLIC_AGENT_API_URL: process.env.EXPO_PUBLIC_AGENT_API_URL,
+  EXPO_PUBLIC_NOTIFICATIONS_API_URL: process.env.EXPO_PUBLIC_NOTIFICATIONS_API_URL,
 });
 
 if (!parsed.success) {
@@ -52,4 +54,5 @@ export const env = {
   apiKey: parsed.data.EXPO_PUBLIC_API_KEY,
   sentryDsn: parsed.data.EXPO_PUBLIC_SENTRY_DSN || undefined,
   agentApiUrl: parsed.data.EXPO_PUBLIC_AGENT_API_URL?.replace(/\/+$/, ""),
+  notificationsApiUrl: parsed.data.EXPO_PUBLIC_NOTIFICATIONS_API_URL?.replace(/\/+$/, ""),
 } as const;

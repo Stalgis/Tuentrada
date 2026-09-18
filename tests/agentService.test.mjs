@@ -384,3 +384,34 @@ test("si el cliente cancela se aborta el run y no se guarda historial", async (t
   assert.equal(serverSawAbort, true);
   assert.equal(conversations.size, 0);
 });
+
+test("una petición incompleta libera el cupo al vencer el timeout", async t => {
+  const { request } = await import("node:http");
+  const guards = createGuards({ maxConcurrent: 1 });
+  let authCalls = 0;
+  const server = createAgentHttpServer({ guards, requestTimeoutMs: 40,
+    authenticate: async () => { authCalls++; return { fingerprint: "test", user: {} }; },
+    answerQuestion: async () => ({ answer: "ok" }), logger: silentLogger,
+  });
+  server.listen(0, "127.0.0.1"); await once(server, "listening");
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const slow = request(`${url}/api/agent/chat`, { method: "POST", headers: { "Content-Length": "100" } });
+  slow.on("error", () => {});
+  t.after(() => slow.destroy());
+  const reply = once(slow, "response");
+  slow.write('{"message":');
+  const [response] = await reply; response.resume();
+  assert.equal(response.statusCode, 504);
+  assert.equal(authCalls, 0);
+  assert.equal(guards.stats().inFlight, 0);
+  assert.equal((await chat(url, { message: "hola" })).status, 200);
+});
+
+test("avisa cuando se perdió el historial de una continuación", async t => {
+  const app = await startTestServer(); t.after(() => app.server.close());
+  const first = await chat(app.baseUrl, { message: "¿y ayer?", conversationId: "lost-history", continuation: true });
+  assert.equal((await first.json()).conversationReset, true);
+  const next = await chat(app.baseUrl, { message: "¿y hoy?", conversationId: "lost-history", continuation: true });
+  assert.equal((await next.json()).conversationReset, false);
+});

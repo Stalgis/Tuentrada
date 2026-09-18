@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from "react-n
 import { Feather } from "@expo/vector-icons";
 import SurfaceCard from "./stitch/SurfaceCard";
 import { radius, spacing, typography } from "../lib/design";
-import { deviceTimezone, type NotificationCategory } from "../lib/pushApi";
+import { type NotificationCategory } from "../lib/pushApi";
 import { getPalette } from "../lib/theme";
 import { useAppState } from "../store/appState";
 import { usePush } from "../store/push";
@@ -37,10 +37,12 @@ const NotificationSettings = () => {
   const {
     available,
     unsupportedReason,
-    backendReady,
     permission,
     preferences,
     busyCategory,
+    initializing,
+    preferencesReady,
+    refresh,
     error,
     setCategory,
     openSettings,
@@ -49,7 +51,7 @@ const NotificationSettings = () => {
   const blocked = permission === "denied";
   const anyEnabled = preferences.functionReports || preferences.weeklySummary;
 
-  const statusLabel = !available
+  const statusLabel = initializing && available ? "Cargando…" : !available
     ? "No disponible todavía"
     : blocked
       ? "Bloqueadas desde el teléfono"
@@ -111,7 +113,7 @@ const NotificationSettings = () => {
               <Switch
                 value={preferences[category.key]}
                 onValueChange={(next) => handleToggle(category.key, next)}
-                disabled={!available || busyCategory !== null}
+                disabled={!available || initializing || !preferencesReady || busyCategory !== null}
                 trackColor={{ false: palette.muted, true: palette.primarySoft }}
                 thumbColor={preferences[category.key] ? palette.primary : undefined}
                 accessibilityLabel={category.label}
@@ -123,7 +125,7 @@ const NotificationSettings = () => {
 
       {preferences.weeklySummary ? (
         <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.md }}>
-          Resumen: {WEEKLY_SCHEDULE} · {deviceTimezone()}
+          Resumen: {WEEKLY_SCHEDULE} · hora de la cuenta
         </Text>
       ) : null}
 
@@ -132,20 +134,16 @@ const NotificationSettings = () => {
           {error}
         </Text>
       ) : null}
+      {error && available ? (
+        <Pressable accessibilityRole="button" onPress={() => void refresh()} disabled={initializing || busyCategory !== null}>
+          <Text style={{ color: palette.primary, paddingVertical: spacing.md }}>Reintentar</Text>
+        </Pressable>
+      ) : null}
 
       {!available ? (
         <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.md }}>
           {unsupportedReason ??
             "Los avisos de informes todavía no están disponibles. Te avisamos cuando se activen."}
-        </Text>
-      ) : null}
-
-      {/* En desarrollo el feature se puede usar para obtener el token y probar
-          el camino completo, pero la pantalla no puede dar a entender que hay
-          alguien del otro lado enviando. */}
-      {available && !backendReady ? (
-        <Text style={{ ...typography.body, color: palette.warning, marginTop: spacing.md }}>
-          Modo de prueba: el servidor todavía no envía estos avisos.
         </Text>
       ) : null}
 

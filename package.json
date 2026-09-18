@@ -12,7 +12,9 @@
     "lint": "expo lint",
     "agent:lab": "node --env-file-if-exists=.env labs/agent-sdk/cli.mjs",
     "agent:lab:live": "node --env-file-if-exists=.env labs/agent-sdk/cli.mjs --live",
-    "agent:server": "node --env-file-if-exists=.env server/agent-service/index.mjs"
+    "agent:server": "node --env-file-if-exists=.env server/agent-service/index.mjs",
+    "notifications:server": "node --env-file-if-exists=.env server/notification-service/index.mjs",
+    "agent:eval": "node --env-file-if-exists=.env server/agent-service/evals/run.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -62,8 +64,12 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "react-test-renderer": "^19.1.0",
     "tailwindcss": "^3.4.18",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24.14.0"
+  }
 }

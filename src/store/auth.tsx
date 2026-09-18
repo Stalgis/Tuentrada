@@ -20,7 +20,7 @@ import {
 } from "../lib/authApi";
 import { clearAllCaches } from "../lib/apiClient";
 import { clearPendingDestination } from "../lib/pendingNotification";
-import { clearStoredPushState, readStoredPushToken, unregisterDevice } from "../lib/pushApi";
+import { takeStoredPushToken, unregisterDevice } from "../lib/pushApi";
 import { logoutApi, setOnUnauthorized } from "../lib/reportApi";
 import { bumpGeneration, currentGeneration, isCurrentGeneration } from "../lib/session";
 import type { User } from "../lib/types";
@@ -353,6 +353,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       if (endingGenerationRef.current === currentGeneration()) return;
 
       const tokenSnapshot = accessToken;
+      const pendingPushToken = takeStoredPushToken();
 
       // 1) invalidar generación y limpiar todo lo local
       const nextGen = bumpGeneration();
@@ -372,14 +373,9 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         await clearBiometricStorage();
       }
 
-      // 3) notificaciones: el estado local se borra en todo cierre, manual o
-      // no. Las preferencias y el push token viven en un almacenamiento del
-      // teléfono, no de la cuenta: si vence la sesión de A y entra B, B
-      // heredaría los interruptores de A y su dispositivo quedaría registrado
-      // sin haberlo pedido. Se espera el borrado —no se dispara y olvida—
-      // porque un login inmediato podría leerlas antes de que se borren.
-      const pushTokenSnapshot = await readStoredPushToken();
-      await clearStoredPushState();
+      // 3) recuperar el token y borrar su caché en una sola operación ya
+      // encolada, sin borrar un registro que haya creado la siguiente sesión.
+      const pushTokenSnapshot = await pendingPushToken;
 
       // La baja en el backend sí es sólo del cierre manual: si la sesión
       // venció, el token ya no sirve para autenticar la petición.

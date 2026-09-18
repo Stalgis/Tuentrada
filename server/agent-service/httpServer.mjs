@@ -1,18 +1,11 @@
+import { readJson, RequestValidationError } from "../http.mjs";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { AuthenticationError } from "./auth.mjs";
 import { createConversationStore } from "./conversationStore.mjs";
 
-const MAX_BODY_BYTES = 16 * 1024;
 const MAX_MESSAGE_LENGTH = 2_000;
 const CONVERSATION_ID = /^[A-Za-z0-9_-]{8,64}$/;
-
-class RequestValidationError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "RequestValidationError";
-  }
-}
 
 const writeJson = (response, status, payload, { allowedOrigin = "*", headers = {} } = {}) => {
   response.writeHead(status, {
@@ -23,25 +16,6 @@ const writeJson = (response, status, payload, { allowedOrigin = "*", headers = {
     ...headers,
   });
   response.end(JSON.stringify(payload));
-};
-
-const readJson = async (request) => {
-  const chunks = [];
-  let size = 0;
-
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > MAX_BODY_BYTES) {
-      throw new RequestValidationError("El body supera el límite permitido.");
-    }
-    chunks.push(chunk);
-  }
-
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw new RequestValidationError("El body debe contener JSON válido.");
-  }
 };
 
 const validateMessage = (body) => {
@@ -140,7 +114,7 @@ export const createAgentHttpServer = ({
         ? guards.acquireGlobal()
         : null;
 
-      const body = await readJson(request);
+      const body = await readJson(request, controller.signal);
       const message = validateMessage(body);
       const conversationId = validateConversationId(body);
 
@@ -182,12 +156,19 @@ export const createAgentHttpServer = ({
         {
           answer: result.answer,
           requestId,
+          conversationReset: body.continuation === true && history.length === 0,
           ...(exposeToolCalls ? { toolCalls: result.toolCalls } : {}),
         },
         { allowedOrigin },
       );
     } catch (error) {
       usage = error?.usage ?? usage;
+      // No conservar sockets cuyo body quedó incompleto. La respuesta se
+      // termina primero para que el cliente pueda recibir el 400/504.
+      if (!request.complete && !clientDisconnected) {
+        response.setHeader("Connection", "close");
+        response.once("finish", () => request.destroy());
+      }
 
       if (clientDisconnected) {
         // El socket ya no existe. 499 queda sólo en el log; no se intenta

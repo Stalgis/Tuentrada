@@ -225,3 +225,21 @@ test("ningún nombre crudo del backend sale en la respuesta de la tool", async (
   }
   assert.equal(JSON.stringify(result).includes("chart"), false);
 });
+
+test("compara dos rangos personalizados independientes", async () => {
+  const { runContext, llamadas } = makeContext();
+  const result = parse(await call(runContext, {
+    periodoDeVenta: "personalizado", ventasDesde: "2026-09-01", ventasHasta: "2026-09-07",
+    compararCon: "personalizado", compararDesde: "2026-08-01", compararHasta: "2026-08-07",
+  }));
+  assert.equal(llamadas[0].period.dateFrom, "2026-09-01");
+  assert.equal(llamadas[1].period.dateFrom, "2026-08-01");
+  assert.equal(result.variacion.recaudacionARS.porcentaje, 0);
+});
+
+test("no envía fechas inexistentes al backend", async () => {
+  const { runContext, llamadas } = makeContext();
+  const output = await call(runContext, { periodoDeVenta: "personalizado", ventasDesde: "2026-02-30", ventasHasta: "2026-03-01" });
+  assert.match(String(output), /fecha válida/);
+  assert.equal(llamadas.length, 0);
+});

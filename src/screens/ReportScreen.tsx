@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { RouteProp, useIsFocused, useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/stitch/AppHeader";
 import SurfaceCard from "../components/stitch/SurfaceCard";
@@ -50,20 +50,26 @@ const ReportScreen = () => {
   const { user, accessToken } = useAuth();
   const palette = getPalette(theme);
   const destination = route.params;
+  const focused = useIsFocused();
+  const request = useRef<AbortController | null>(null);
+  const polls = useRef(0);
 
   const [state, setState] = useState<ScreenState>({ kind: "loading" });
 
   const load = useCallback(async () => {
     if (!accessToken) return;
     const gen = currentGeneration();
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     setState({ kind: "loading" });
 
     try {
-      const snapshot = await fetchReportSnapshot(accessToken, destination.reportId);
-      if (!isCurrentGeneration(gen)) return;
+      const snapshot = await fetchReportSnapshot(accessToken, destination.reportId, controller.signal);
+      if (!isCurrentGeneration(gen) || controller.signal.aborted) return;
       setState({ kind: "ready", snapshot });
     } catch (error) {
-      if (!isCurrentGeneration(gen)) return;
+      if (!isCurrentGeneration(gen) || controller.signal.aborted) return;
 
       if (error instanceof ReportUnavailableError) {
         setState({
@@ -99,19 +105,32 @@ const ReportScreen = () => {
   }, [accessToken, destination.reportId]);
 
   useEffect(() => {
+    if (!focused) return;
+    polls.current = 0;
     void load();
-  }, [load]);
+    return () => request.current?.abort();
+  }, [focused, load]);
 
+  useEffect(() => {
+    if (!focused || state.kind !== "ready" || state.snapshot.status !== "generating" || polls.current >= 10) return;
+    const timer = setTimeout(() => { polls.current += 1; void load(); }, 3_000);
+    return () => clearTimeout(timer);
+  }, [focused, state, load]);
+
+  const details = state.kind === "ready" ? state.snapshot : destination;
   const period = useMemo(() => {
-    if (!destination.periodStart || !destination.periodEnd) return undefined;
-    return `${formatPeriodDay(destination.periodStart)} — ${formatPeriodDay(destination.periodEnd)}`;
-  }, [destination.periodEnd, destination.periodStart]);
-
-  const title = reportTitle(destination.type);
+    if (!details.periodStart || !details.periodEnd) return undefined;
+    return `${formatPeriodDay(details.periodStart)} — ${formatPeriodDay(details.periodEnd)}`;
+  }, [details.periodEnd, details.periodStart]);
+  const title = reportTitle(details.type);
+  const metrics = state.kind === "ready" && state.snapshot.status === "ready" ? state.snapshot.metrics : undefined;
+  const number = (value: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
+  const money = (value: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(value);
 
   const actionButton = (label: string, icon: keyof typeof Feather.glyphMap, onPress: () => void) => (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
       style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
     >
       <View
@@ -200,16 +219,40 @@ const ReportScreen = () => {
             </SurfaceCard>
           ) : null}
 
+          {metrics ? (
+            <SurfaceCard>
+              <Text style={{ ...typography.title, color: palette.text }}>Resultados del período</Text>
+              <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>Importes en pesos argentinos. Las invitaciones se muestran por separado.</Text>
+              {[
+                ["Recaudación", money(metrics.recaudacionARS)],
+                ["Entradas pagas", number(metrics.entradasPagas)],
+                ["Invitaciones", number(metrics.invitaciones)],
+                ["Entradas totales", number(metrics.entradasTotales)],
+                ["Precio promedio", money(metrics.precioPromedioARS)],
+                ["Compradores únicos", number(metrics.compradoresUnicos)],
+              ].map(([label, value]) => (
+                <View key={label} style={{ marginTop: spacing.md, gap: spacing.xs }}>
+                  <Text style={{ ...typography.body, color: palette.subtext }}>{label}</Text>
+                  <Text selectable style={{ ...typography.heading, color: palette.text, fontVariant: ["tabular-nums"] }}>{value}</Text>
+                </View>
+              ))}
+            </SurfaceCard>
+          ) : null}
           {state.kind === "ready" ? (
             <SurfaceCard>
               <Text style={{ ...typography.title, color: palette.text }}>Estado</Text>
               <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
                 {state.snapshot.status === "ready"
-                  ? "Informe generado y listo para leer."
+                  ? "Estos valores corresponden al momento de generación del informe."
                   : state.snapshot.status === "generating"
                     ? "El informe se está generando."
                     : "El informe no pudo generarse."}
               </Text>
+              {state.snapshot.status !== "ready" ? (
+                <View style={{ marginTop: spacing.md }}>
+                  {actionButton("Actualizar informe", "refresh-cw", () => { polls.current = 0; void load(); })}
+                </View>
+              ) : null}
               {state.snapshot.generatedAt ? (
                 <Text style={{ ...typography.body, color: palette.subtext, marginTop: spacing.xs }}>
                   Generado el {formatPeriodDay(state.snapshot.generatedAt)}

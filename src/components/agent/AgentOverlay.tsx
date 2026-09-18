@@ -88,9 +88,9 @@ const AgentOverlay = ({ open, onClose, buttonBottom }: AgentOverlayProps) => {
   }, [open, progress, reduceMotion]);
 
   /**
-   * Una conversación por sesión: no hay forma de reiniciar el hilo a mano. Se
-   * corta solo al cerrar sesión, o del lado del servidor tras 30 minutos sin
-   * actividad. Es una decisión de producto, no un pendiente.
+   * La conversación se conserva al cerrar la capa. Nueva conversación permite
+   * reiniciarla; el cambio de sesión desmonta todo el chat. El servidor también
+   * vence el historial tras 30 minutos sin actividad.
    *
    * Lo que hace útil a esta capa (que nada se destruya) es también su único
    * riesgo: si cambiara de usuario sin desmontarse, el segundo vería los

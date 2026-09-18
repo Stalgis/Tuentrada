@@ -1,3 +1,4 @@
+import { assertISODate } from "./calendar.mjs";
 import { todayInArgentina } from "./eventDateRanges.mjs";
 import { ToolInputError } from "./toolErrors.mjs";
 
@@ -46,13 +47,8 @@ const PRESETS = {
   mes_pasado: { date: "last_month", etiqueta: "el mes pasado" },
 };
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const assertISODate = (value, fieldName) => {
-  if (!ISO_DATE.test(value ?? "")) {
-    throw new ToolInputError(`${fieldName} debe tener formato YYYY-MM-DD.`);
-  }
-};
+
 
 const diaAnterior = (fecha) => {
   const [year, month, day] = fecha.split("-").map(Number);

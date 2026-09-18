@@ -29,10 +29,12 @@ const NotificationRouter = () => {
     // terminado de publicar su estado, y navegar antes de eso no hace nada.
     const timer = setTimeout(flush, 0);
     const unsubscribe = subscribeToPendingDestination(flush);
+    const unsubscribeReady = navigationRef.addListener("ready", flush);
 
     return () => {
       clearTimeout(timer);
       unsubscribe();
+      unsubscribeReady();
     };
   }, []);
 

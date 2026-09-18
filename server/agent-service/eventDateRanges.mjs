@@ -1,3 +1,4 @@
+import { assertISODate } from "./calendar.mjs";
 import { ToolInputError } from "./toolErrors.mjs";
 
 const ARGENTINA_TIME_ZONE = "America/Argentina/Buenos_Aires";
@@ -66,11 +67,7 @@ const monthRange = (reference, monthOffset) => {
   };
 };
 
-const assertISODate = (value, fieldName) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value ?? "")) {
-    throw new ToolInputError(`${fieldName} debe tener formato YYYY-MM-DD.`);
-  }
-};
+
 
 /** Fecha de hoy en Argentina como YYYY-MM-DD. */
 export const todayInArgentina = (now = new Date()) =>
