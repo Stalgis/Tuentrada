@@ -11,5 +11,18 @@ module.exports = ({ config }) => {
   if (androidBuild && process.env.EXPO_PUBLIC_NOTIFICATIONS_API_URL && !googleServicesFile) {
     throw new Error("Push está habilitado pero falta GOOGLE_SERVICES_JSON para registrar Android con FCM.");
   }
-  return { ...config, android: { ...config.android, ...(googleServicesFile ? { googleServicesFile } : {}) } };
+
+  const notificationsEnabled = Boolean(process.env.EXPO_PUBLIC_NOTIFICATIONS_API_URL);
+  const plugins = notificationsEnabled
+    ? config.plugins
+    : config.plugins?.filter((plugin) => {
+        const pluginName = Array.isArray(plugin) ? plugin[0] : plugin;
+        return pluginName !== "expo-notifications";
+      });
+
+  return {
+    ...config,
+    plugins,
+    android: { ...config.android, ...(googleServicesFile ? { googleServicesFile } : {}) },
+  };
 };
