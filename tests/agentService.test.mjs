@@ -18,6 +18,7 @@ const startTestServer = async ({
   guards,
   conversations,
   exposeToolCalls,
+  requestTimeoutMs,
 } = {}) => {
   const calls = [];
   const reports = { source: "fake" };
@@ -43,6 +44,7 @@ const startTestServer = async ({
     guards,
     conversations,
     exposeToolCalls,
+    requestTimeoutMs,
     logger: silentLogger,
   });
 
@@ -175,6 +177,29 @@ test("el timeout del backend sale 504, no 500", async (t) => {
 
   const response = await chat(app.baseUrl, { message: "Hola" });
   assert.equal(response.status, 504);
+});
+
+test("el timeout global no espera una autenticación lenta ni llama al agente", async (t) => {
+  let agentCalls = 0;
+  const app = await startTestServer({
+    requestTimeoutMs: 20,
+    authenticate: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return { user: { id: "u" }, fingerprint: "fp", reports: {} };
+    },
+    answerQuestion: async () => {
+      agentCalls += 1;
+      return { answer: "no deberia llegar acá" };
+    },
+  });
+  t.after(() => app.server.close());
+
+  const started = Date.now();
+  const response = await chat(app.baseUrl, { message: "Hola" });
+  assert.equal(response.status, 504);
+  assert.ok(Date.now() - started < 100, "debe responder al vencer el timeout global");
+  await new Promise((resolve) => setTimeout(resolve, 130));
+  assert.equal(agentCalls, 0);
 });
 
 test("un error del agente con httpStatus sale con ese status y mensaje publico", async (t) => {

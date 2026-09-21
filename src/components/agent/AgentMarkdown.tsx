@@ -33,7 +33,9 @@ const AgentMarkdown = ({ children, color, bulletColor, style, gap }: Props) => (
         return (
           <View key={index} style={{ flexDirection: "row", alignItems: "flex-start" }}>
             <Text style={{ ...style, color: bulletColor, width: 14 }}>{"•"}</Text>
-            <Text style={{ ...style, color, flex: 1 }}>
+            {/* Conservar el ancho intrínseco para que la burbuja mida también
+                las viñetas; flex: 1 las medía con una base de ancho cero. */}
+            <Text style={{ ...style, color, flexShrink: 1 }}>
               {renderSpans(block.spans, style, color)}
             </Text>
           </View>

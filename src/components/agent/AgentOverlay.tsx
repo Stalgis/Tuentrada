@@ -183,6 +183,7 @@ const AgentOverlay = ({ open, onClose, buttonBottom }: AgentOverlayProps) => {
         <AgentConversation
           key={sessionGeneration}
           conversationId={conversationId}
+          keyboardVerticalOffset={insets.top + STRIP_HEIGHT}
           // El botón queda flotando sobre la conversación: sin este aire, el
           // último mensaje se lee por debajo del círculo.
           scrollBottomInset={Math.max(0, buttonBottom + BUTTON_SIZE - insets.bottom)}

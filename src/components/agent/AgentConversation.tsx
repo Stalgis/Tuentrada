@@ -94,6 +94,7 @@ const ComposerButton = ({
   variant = "solid",
 }: ComposerButtonProps) => {
   const solido = variant === "solid" && !disabled;
+  const [pressed, setPressed] = useState(false);
 
   return (
     <Pressable
@@ -102,7 +103,11 @@ const ComposerButton = ({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => ({
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      // NativeWind procesa `style`: mantener un objeto evita que se pierda
+      // el fondo del botón al envolver una función de estilo de Pressable.
+      style={{
         width: COMPOSER_CONTROL,
         height: COMPOSER_CONTROL,
         borderRadius: radius.pill,
@@ -111,8 +116,8 @@ const ComposerButton = ({
         backgroundColor: solido ? accent : mutedSurface,
         borderWidth: solido ? 1 : 1.5,
         borderColor: accent,
-        transform: [{ scale: pressed ? 0.94 : 1 }],
-      })}
+        transform: [{ scale: pressed && !disabled ? 0.94 : 1 }],
+      }}
     >
       <Feather name={icon} size={20} color={solido ? onAccent : accent} />
     </Pressable>
@@ -134,11 +139,15 @@ type AgentConversationProps = {
    * pantalla no hay botón encima, así que vale 0.
    */
   scrollBottomInset?: number;
+  /** Distancia desde el borde superior de la pantalla hasta esta conversación.
+   * iOS informa la posición del teclado en coordenadas de pantalla. */
+  keyboardVerticalOffset?: number;
 };
 
 const AgentConversation = ({
   conversationId,
   scrollBottomInset = 0,
+  keyboardVerticalOffset = 0,
 }: AgentConversationProps) => {
   const { theme } = useAppState();
   const { accessToken } = useAuth();
@@ -237,6 +246,7 @@ const AgentConversation = ({
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? keyboardVerticalOffset : 0}
     >
         {/* Tapa de la hoja. No lleva acciones: separa el fondo atenuado del área
             de mensajes y le da un borde superior a la conversación, que si no

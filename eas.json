@@ -13,9 +13,20 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "testflight": {
+      "extends": "production",
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_AGENT_API_URL": "https://tuentrada-agent.onrender.com"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "extends": "production"
+    }
   }
 }

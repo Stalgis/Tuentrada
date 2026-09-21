@@ -45,6 +45,26 @@ const validateConversationId = (body) => {
   return value;
 };
 
+/** Espera una operación que puede no conocer AbortSignal sin dejar que retenga
+ * la petición ni avance al agente después del timeout global. */
+const waitWithSignal = (operation, signal) => {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve(operation).then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+};
+
 export const createAgentHttpServer = ({
   authenticate,
   answerQuestion,
@@ -118,7 +138,7 @@ export const createAgentHttpServer = ({
       const message = validateMessage(body);
       const conversationId = validateConversationId(body);
 
-      const auth = await authenticate(request);
+      const auth = await waitWithSignal(authenticate(request), controller.signal);
       fingerprint = auth.fingerprint;
       reports = auth.reports;
       reports?.setSignal?.(controller.signal);
@@ -131,6 +151,7 @@ export const createAgentHttpServer = ({
         : null;
       const history = conversationKey ? conversations.get(conversationKey) : [];
 
+      if (controller.signal.aborted) throw controller.signal.reason;
       const result = await answerQuestion({
         message,
         user: auth.user,

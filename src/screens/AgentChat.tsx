@@ -1,8 +1,8 @@
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React from "react";
+import React, { useState } from "react";
 import { View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import AgentConversation from "../components/agent/AgentConversation";
 import AppHeader from "../components/stitch/AppHeader";
 import { getPalette } from "../lib/theme";
@@ -26,17 +26,21 @@ const AgentChat = () => {
   const { theme } = useAppState();
   const { user } = useAuth();
   const palette = getPalette(theme);
+  const insets = useSafeAreaInsets();
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
       <View style={{ flex: 1 }}>
-        <AppHeader
-          title="Agente beta"
-          subtitle="Prueba con catálogo real"
-          avatarInitials={user?.initials}
-          onBackPress={() => navigation.goBack()}
-        />
-        <AgentConversation />
+        <View onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}>
+          <AppHeader
+            title="Agente beta"
+            subtitle="Prueba con catálogo real"
+            avatarInitials={user?.initials}
+            onBackPress={() => navigation.goBack()}
+          />
+        </View>
+        <AgentConversation keyboardVerticalOffset={insets.top + headerHeight} />
       </View>
     </SafeAreaView>
   );
