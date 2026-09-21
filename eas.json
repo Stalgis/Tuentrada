@@ -12,6 +12,7 @@
       "distribution": "internal"
     },
     "production": {
+      "node": "24.14.0",
       "autoIncrement": true
     },
     "testflight": {
