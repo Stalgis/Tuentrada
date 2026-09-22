@@ -1,4 +1,11 @@
 const fs = require("node:fs");
+const { withEntitlementsPlist } = require("expo/config-plugins");
+
+const withoutIosPushEntitlement = (config) =>
+  withEntitlementsPlist(config, (modConfig) => {
+    delete modConfig.modResults["aps-environment"];
+    return modConfig;
+  });
 
 module.exports = ({ config }) => {
   // EAS permite subir google-services.json como variable de tipo archivo.
@@ -15,10 +22,13 @@ module.exports = ({ config }) => {
   const notificationsEnabled = Boolean(process.env.EXPO_PUBLIC_NOTIFICATIONS_API_URL);
   const plugins = notificationsEnabled
     ? config.plugins
-    : config.plugins?.filter((plugin) => {
-        const pluginName = Array.isArray(plugin) ? plugin[0] : plugin;
-        return pluginName !== "expo-notifications";
-      });
+    : [
+        ...(config.plugins?.filter((plugin) => {
+          const pluginName = Array.isArray(plugin) ? plugin[0] : plugin;
+          return pluginName !== "expo-notifications";
+        }) ?? []),
+        withoutIosPushEntitlement,
+      ];
 
   return {
     ...config,
